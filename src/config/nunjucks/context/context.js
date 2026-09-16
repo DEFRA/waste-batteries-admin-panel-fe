@@ -26,7 +26,9 @@ function buildAuthContext(request) {
 
   return {
     isAuthenticated: true,
-    ...{ displayName, organisationName, email }
+    displayName,
+    organisationName,
+    email
   }
 }
 

@@ -48,7 +48,8 @@ function composeLogs() {
 
 test.describe('Containerised app', { tag: '@auth' }, () => {
   test.beforeEach(async () => {
-    test.skip(
+    // prettier-ignore
+    test.skip(/* NOSONAR -- requires the externally started Compose service */
       !(await isContainerisedAppRunning()),
       'The compose `frontend` service is not running (docker compose up -d)'
     )
@@ -56,7 +57,11 @@ test.describe('Containerised app', { tag: '@auth' }, () => {
 
   test('starts without failing OIDC discovery', async () => {
     const logs = composeLogs()
-    test.skip(logs === null, 'docker compose logs are unavailable')
+    // prettier-ignore
+    test.skip(/* NOSONAR -- Docker CLI access is optional for this integration test */
+      logs === null,
+      'docker compose logs are unavailable'
+    )
 
     expect(logs).not.toContain('ECONNREFUSED')
   })
