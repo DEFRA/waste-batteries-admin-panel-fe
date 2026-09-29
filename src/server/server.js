@@ -57,10 +57,10 @@ export async function createServer() {
     }
   })
 
-  // Server-side Defra ID auth session store (memory locally, Redis in environments)
+  // Server-side auth session store (memory locally, Redis in environments)
   server.app.cache = server.cache({
     cache: config.get('session.cache.name'),
-    segment: 'defra-id-session',
+    segment: 'auth-session',
     expiresIn: config.get('session.cache.ttl')
   })
 

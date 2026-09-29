@@ -81,15 +81,12 @@ jobs:
       - name: Install Playwright browsers
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
-      # The journeys sign in against the real Defra ID stub, read sessions out of
-      # Redis, and drive the compose `frontend` service for the containerised
-      # journey — so the whole stack comes up, not just the stub
+      # Smoke-tests the image as compose runs it
       - name: Start supporting services
-        run: docker compose up -d --wait floci redis cdp-defra-id-stub frontend
+        run: docker compose up -d --wait floci redis frontend
 
       # `--wait` only waits for a container to be running when it has no
-      # healthcheck, and the containerised journey skips itself against an app
-      # that is not answering yet
+      # healthcheck
       - name: Wait for the containerised app
         run: |
           for _ in $(seq 1 30); do

@@ -27,8 +27,8 @@ describe('#createServer', () => {
     await server.stop({ timeout: 0 })
   })
 
-  describe('Defra ID auth session cache', () => {
-    test('Should store and retrieve a session via the defra-id-session segment', async () => {
+  describe('Auth session cache', () => {
+    test('Should store and retrieve a session via the auth-session segment', async () => {
       await server.app.cache.set('test-session-id', { userId: 'user-123' })
 
       expect(await server.app.cache.get('test-session-id')).toEqual({

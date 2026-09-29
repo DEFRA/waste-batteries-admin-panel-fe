@@ -44,7 +44,6 @@
     "@defra/hapi-secure-context": "0.4.0",
     "@defra/hapi-tracing": "1.30.0",
     "@elastic/ecs-pino-format": "1.5.0",
-    "@hapi/bell": "13.1.0",
     "@hapi/catbox-memory": "6.0.2",
     "@hapi/catbox-redis": "7.0.2",
     "@hapi/cookie": "12.0.1",
@@ -64,7 +63,6 @@
     "hapi-pino": "13.0.0",
     "hapi-pulse": "3.0.0",
     "ioredis": "5.8.2",
-    "jose": "6.2.4",
     "lodash": "4.18.1",
     "nunjucks": "3.2.4",
     "pino": "10.3.1"
@@ -86,7 +84,6 @@
     "stylelint": "16.26.1",
     "stylelint-config-gds": "2.0.0",
     "vite": "8.0.16",
-    "vitest": "4.1.8",
-    "vitest-fetch-mock": "0.4.5"
+    "vitest": "4.1.8"
   }
 }

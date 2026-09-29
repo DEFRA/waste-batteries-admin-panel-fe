@@ -107,77 +107,26 @@ To run everything in docker, you can use:
 docker compose up -d
 ```
 
-To run the application in development mode without docker, you will need to have the following services running locally:
-
-The app authenticates with Defra ID and fetches its OIDC configuration at
-startup, so start the local [Defra ID stub](#defra-id-authentication) first:
-
-```bash
-docker compose up -d cdp-defra-id-stub
-```
-
-Then run the application in `development` mode:
+To run the application in `development` mode without docker:
 
 ```bash
 npm run dev
 ```
 
-### Defra ID (authentication)
+### Authentication
 
-This service signs users in with Defra ID (see [specs/defra-id.md](specs/defra-id.md)).
-Locally it uses the [cdp-defra-id-stub](https://github.com/DEFRA/cdp-defra-id-stub),
-which `docker compose up -d cdp-defra-id-stub` starts on port `3200` along with
-its dependencies (Redis and DynamoDB via floci). All `defraId` config defaults
-point at the stub — no environment setup needed.
+Every route is protected by default by a cookie-backed session strategy, and
+public routes opt out explicitly. There is no identity provider wired in yet:
+Entra ID is being added (see [scratch/plan.md](scratch/plan.md)). Until then,
+protected routes redirect to `/auth/sign-in`, which does not exist yet.
 
-Create a test user either through the stub's UI (you are redirected there on
-sign-in) or via its API:
+After auth changes, run the end-to-end journeys:
 
 ```bash
-curl -H "Content-Type: application/json" -X POST \
-  -d '{
-    "userId": "86a7607c-a1e7-41e5-a0b6-a41680d05a2a",
-    "email": "jo.bloggs@example.com",
-    "firstName": "Jo",
-    "lastName": "Bloggs",
-    "loa": "1",
-    "aal": "1",
-    "enrolmentCount": 1,
-    "enrolmentRequestCount": 1,
-    "relationships": [
-      {
-        "organisationName": "Acme Waste Ltd",
-        "relationshipRole": "Employee",
-        "roleName": "user",
-        "roleStatus": "3"
-      }
-    ]
-  }' \
-  http://localhost:3200/cdp-defra-id-stub/API/register
-```
-
-To test token refresh without waiting for expiry, force it:
-
-```bash
-curl -X POST http://localhost:3200/cdp-defra-id-stub/API/register/86a7607c-a1e7-41e5-a0b6-a41680d05a2a/expire
-```
-
-After auth changes, run the end-to-end journeys — they cover sign-in, redirect
-preservation, route protection, sign-out, the failure pages, token refresh,
-session storage, organisation switching and the absolute session cap, against
-the real stub:
-
-```bash
-docker compose up -d cdp-defra-id-stub
 npm run test:e2e
 ```
 
-See [e2e/README.md](e2e/README.md) for what each journey covers and how the
-suite is put together.
-
-In deployed environments the identity provider is set per environment:
-the CDP-hosted stub in `dev`, real Defra ID in `test`, `perf-test` and `prod` —
-via the `DEFRA_ID_*` environment variables and CDP service secrets.
+See [e2e/README.md](e2e/README.md) for what each journey covers.
 
 ### Production
 
