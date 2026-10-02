@@ -81,9 +81,11 @@ jobs:
       - name: Install Playwright browsers
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
-      # Smoke-tests the image as compose runs it
+      # Smoke-tests the image as compose runs it, and starts the local Entra
+      # ID stub the sign-in journeys use (Playwright reuses it rather than
+      # starting its own)
       - name: Start supporting services
-        run: docker compose up -d --wait floci redis frontend
+        run: docker compose up -d --wait floci redis entra-stub frontend
 
       # `--wait` only waits for a container to be running when it has no
       # healthcheck

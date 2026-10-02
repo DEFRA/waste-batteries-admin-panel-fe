@@ -166,6 +166,55 @@ export const config = convict({
       env: 'SESSION_ABSOLUTE_TTL'
     }
   },
+  auth: {
+    oidc: {
+      clientId: {
+        doc: 'Entra ID App Registration client (application) id',
+        format: String,
+        default: 'local-client-id',
+        env: 'ENTRA_CLIENT_ID'
+      },
+      discoveryUri: {
+        doc: 'Entra ID .well-known/openid-configuration URL, e.g. https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration. The default is the local Entra stub in compose.yml',
+        format: 'url',
+        default: 'http://localhost:3210/entra/.well-known/openid-configuration',
+        env: 'ENTRA_DISCOVERY_URI'
+      },
+      externalBaseUrl: {
+        doc: 'Public base URL of this service, used to build the callback URL, no trailing slash',
+        format: 'url',
+        default: 'http://localhost:3000',
+        env: 'APP_BASE_URL'
+      },
+      scope: {
+        doc: 'Space-separated scopes requested at sign-in',
+        format: String,
+        default: 'openid profile email offline_access user.read',
+        env: 'ENTRA_SCOPES'
+      },
+      responseMode: {
+        doc: 'How Entra returns the sign-in response: form_post (recommended, needs HTTPS) or query. Null omits the parameter, which defaults to query',
+        format: ['form_post', 'query'],
+        nullable: true,
+        default: isProduction ? 'form_post' : null,
+        env: 'ENTRA_RESPONSE_MODE'
+      }
+    },
+    federatedCredentials: {
+      audience: {
+        doc: 'Audience of the AWS STS web identity token; must match the federated credential on the App Registration',
+        format: String,
+        default: 'api://AzureADTokenExchange',
+        env: 'ENTRA_FEDERATED_AUDIENCE'
+      },
+      enableMocking: {
+        doc: 'Send a fake client assertion, which only the local Entra stub accepts, instead of an AWS STS web identity token. Local development and CI only; the app refuses to start with it on in CDP',
+        format: Boolean,
+        default: !isProduction,
+        env: 'ENTRA_FEDERATED_MOCKING'
+      }
+    }
+  },
   redis: {
     host: {
       doc: 'Redis cache host',

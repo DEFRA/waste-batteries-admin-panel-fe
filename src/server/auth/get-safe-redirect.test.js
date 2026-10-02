@@ -11,6 +11,8 @@ describe('#getSafeRedirect', () => {
     ['/\\evil.example'],
     ['https://evil.example'],
     ['evil.example'],
+    ['/auth/callback'],
+    ['/auth/sign-in?redirect=/'],
     [''],
     [undefined],
     [null],

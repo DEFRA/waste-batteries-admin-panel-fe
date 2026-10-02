@@ -1,0 +1,76 @@
+import { test, expect } from '@playwright/test'
+
+import { signInAtStub, users } from '../../support/entra-stub.js'
+import { expectNoTokensInBrowser } from '../../support/invariants.js'
+import { expectSignedInAs, expectSignedOut } from '../../support/journeys.js'
+
+/**
+ * Signing in through the real sign-in and callback routes, against the local
+ * Entra ID stub. Everything on the app side is what runs in CDP; only the
+ * identity provider and the client assertion are stand-ins.
+ */
+test.describe('Sign in', { tag: '@auth' }, () => {
+  test('signs in from the header and shows who is signed in', async ({
+    page
+  }) => {
+    await page.goto('/')
+    await expectSignedOut(page)
+
+    await page.getByRole('link', { name: 'Sign in' }).click()
+    await signInAtStub(page, users.admin)
+
+    await expect(page).toHaveURL('/')
+    await expectSignedInAs(page, users.admin.claims.name)
+    await expectNoTokensInBrowser(page)
+  })
+
+  test('returns to the protected page the user was heading for', async ({
+    page
+  }) => {
+    await page.goto('/e2e/protected')
+    await signInAtStub(page, users.admin)
+
+    await expect(page).toHaveURL('/e2e/protected')
+    await expect(page.getByTestId('e2e-page-heading')).toHaveText(
+      'Protected page'
+    )
+  })
+
+  test('signs out, and protected pages need signing in again', async ({
+    page
+  }) => {
+    await page.goto('/auth/sign-in')
+    await signInAtStub(page, users.admin)
+    await expectSignedInAs(page, users.admin.claims.name)
+
+    await page.getByRole('link', { name: 'Sign out' }).click()
+
+    await expectSignedOut(page)
+    await page.goto('/e2e/protected')
+    await expect(page).toHaveURL(/^http:\/\/localhost:3210\/entra\//)
+  })
+})
+
+test.describe('App roles', { tag: '@auth' }, () => {
+  const adminOnlyPath = '/e2e/admin-only'
+
+  test('lets a user with the Admin role in', async ({ page }) => {
+    await page.goto(adminOnlyPath)
+    await signInAtStub(page, users.admin)
+
+    await expect(page).toHaveURL(adminOnlyPath)
+    await expect(page.getByTestId('e2e-page-heading')).toHaveText('Admin page')
+  })
+
+  test('shows the no-access page to a user without it', async ({ page }) => {
+    await page.goto(adminOnlyPath)
+    await signInAtStub(page, users.noRoles)
+
+    await expect(
+      page.getByRole('heading', {
+        name: 'You do not have access to this service'
+      })
+    ).toBeVisible()
+    await expectSignedInAs(page, users.noRoles.claims.name)
+  })
+})
