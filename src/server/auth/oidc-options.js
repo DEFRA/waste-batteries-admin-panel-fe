@@ -27,7 +27,7 @@ export function getOidcOptions() {
             audience: federatedCredentials.audience
           })
         : new WebIdentityTokenProvider({
-            audience: federatedCredentials.audience
+            audience: [federatedCredentials.audience]
           })
     },
     cookieOptions: {

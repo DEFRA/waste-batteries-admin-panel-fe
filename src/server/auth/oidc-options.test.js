@@ -19,7 +19,7 @@ describe('#getOidcOptions', () => {
     const { authProvider } = getOidcOptions().oidc
 
     expect(authProvider).toBeInstanceOf(WebIdentityTokenProvider)
-    expect(authProvider.audience).toBe('api://AzureADTokenExchange')
+    expect(authProvider.audience).toEqual(['api://AzureADTokenExchange'])
   })
 
   test('Should need SameSite=None cookies only for form_post', () => {

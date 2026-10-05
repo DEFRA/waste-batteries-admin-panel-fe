@@ -5,6 +5,15 @@ import { config } from '#/config/config.js'
 import { getCookieOptions } from '../auth/get-cookie-options.js'
 import { getOidcOptions } from '../auth/oidc-options.js'
 
+// Refresh runs on ordinary routes, where the request logger is active. Provider
+// errors can contain credentials; the application logs sanitized outcomes.
+const privateLogger = {
+  info() {},
+  debug() {},
+  warn() {},
+  error() {}
+}
+
 /**
  * Registers Entra ID sign-in and the session auth strategy:
  * - hapi-auth-oidc: decorates the request with login, callback and
@@ -24,6 +33,16 @@ export const auth = {
         cookie,
         { plugin: hapiAuthOidcPlugin, options: getOidcOptions() }
       ])
+      const oidc = server.plugins['hapi-auth-oidc'].oidc
+      const ensureValidToken = oidc.ensureValidToken
+      // Login and callback already have a no-op logger via /auth/ filtering.
+      oidc.ensureValidToken = (request, token) => {
+        const privateRequest = Object.create(request)
+        Object.defineProperty(privateRequest, 'logger', {
+          value: privateLogger
+        })
+        return ensureValidToken.call(oidc, privateRequest, token)
+      }
       server.auth.strategy('session', 'cookie', getCookieOptions())
       server.auth.default({
         strategy: 'session',

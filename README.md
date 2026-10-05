@@ -119,6 +119,7 @@ npm run dev
 - [How sign-in works](#how-sign-in-works)
 - [Configuration](#configuration)
 - [App Registration](#app-registration)
+- [CDP dev verification](docs/entra-id-verification.md)
 - [How this follows the CDP docs](#how-this-follows-the-cdp-docs)
 - [Signing in locally and in CI](#signing-in-locally-and-in-ci)
   - [Why there is a stub](#why-there-is-a-stub)
@@ -174,7 +175,8 @@ The code is in [src/server/plugins/auth.js](src/server/plugins/auth.js),
 
 In CDP, set `ENTRA_CLIENT_ID`, `ENTRA_DISCOVERY_URI`, `APP_BASE_URL` and
 `SESSION_COOKIE_PASSWORD` per environment, and never set
-`ENTRA_FEDERATED_MOCKING`.
+`ENTRA_FEDERATED_MOCKING=true`. Use [the CDP dev verification checklist](docs/entra-id-verification.md)
+for deployment settings and live acceptance checks.
 
 #### App Registration
 

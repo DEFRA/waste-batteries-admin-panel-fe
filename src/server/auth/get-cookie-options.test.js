@@ -5,6 +5,7 @@ import { getCookieOptions } from './get-cookie-options.js'
 function buildRequest(cached, ensureValidToken = vi.fn()) {
   return {
     server: {
+      logger: { info: vi.fn() },
       app: {
         cache: {
           get: vi.fn().mockResolvedValue(cached),
@@ -14,6 +15,7 @@ function buildRequest(cached, ensureValidToken = vi.fn()) {
       }
     },
     ensureValidToken,
+    info: { id: 'request-1' },
     logger: { info: vi.fn() }
   }
 }

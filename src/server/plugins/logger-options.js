@@ -21,7 +21,17 @@ export const loggerOptions = {
   enabled: logConfig.enabled,
   ignorePaths: ['/health'],
   redact: {
-    paths: logConfig.redact,
+    paths: [
+      ...new Set([
+        ...logConfig.redact,
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'req.headers.referer',
+        'req.url',
+        'req.query',
+        'res.headers'
+      ])
+    ],
     remove: true
   },
   level: logConfig.level,

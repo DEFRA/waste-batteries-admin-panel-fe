@@ -27,13 +27,57 @@ test.describe('Sign in', { tag: '@auth' }, () => {
   test('returns to the protected page the user was heading for', async ({
     page
   }) => {
-    await page.goto('/e2e/protected')
+    await page.goto('/e2e/protected?tab=details')
     await signInAtStub(page, users.admin)
 
-    await expect(page).toHaveURL('/e2e/protected')
+    await expect(page).toHaveURL('/e2e/protected?tab=details')
     await expect(page.getByTestId('e2e-page-heading')).toHaveText(
       'Protected page'
     )
+  })
+
+  test('a malformed return URL stays inside the app', async ({ page }) => {
+    await page.goto(
+      `/auth/sign-in?redirect=${encodeURIComponent('/\t/evil.example')}`
+    )
+    await signInAtStub(page, users.admin)
+
+    await expect(page).toHaveURL('/')
+    await expectSignedInAs(page, users.admin.claims.name)
+  })
+
+  test('a cancelled authorization response shows the recovery page without signing in', async ({
+    page
+  }) => {
+    const authorization = page.waitForRequest((request) => {
+      const url = new URL(request.url())
+      return (
+        url.origin === entraStub.origin && url.pathname === '/entra/authorize'
+      )
+    })
+    await page.goto('/auth/sign-in')
+    const parameters = new URL((await authorization).url()).searchParams
+    const callback = new URL(parameters.get('redirect_uri'))
+    callback.searchParams.set('state', parameters.get('state'))
+    callback.searchParams.set('error', 'access_denied')
+    callback.searchParams.set(
+      'error_description',
+      'fake-private-error-description'
+    )
+
+    // The stub has no cancellation button; simulate its OAuth error redirect
+    // while retaining the real browser correlation cookie and state.
+    const response = await page.goto(callback.toString())
+    expect(response.status()).toBe(401)
+    await expect(
+      page.getByRole('heading', { name: 'We could not sign you in' })
+    ).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: 'Try signing in again' })
+    ).toBeVisible()
+    expect(await page.content()).not.toContain('fake-private-error-description')
+    await page.goto('/')
+    await expectSignedOut(page)
   })
 
   test('signs out of the app and Entra, and protected pages need signing in again', async ({

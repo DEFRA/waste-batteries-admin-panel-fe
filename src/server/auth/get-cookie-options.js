@@ -1,5 +1,6 @@
 import { config } from '#/config/config.js'
 import { toSession } from './session.js'
+import { logAuthEvent } from './log-auth-event.js'
 
 export function getCookieOptions() {
   return {
@@ -47,11 +48,10 @@ export function getCookieOptions() {
           refreshToken: token.refreshToken ?? cached.refreshToken
         }
         await cache.set(session.sessionId, updated)
+        logAuthEvent(request, 'auth.refresh', 'succeeded')
         return { isValid: true, credentials: updated }
-      } catch (error) {
-        request.logger.info(
-          `Token refresh failed, dropping session: ${error.message}`
-        )
+      } catch {
+        logAuthEvent(request, 'auth.refresh', 'failed')
         await cache.drop(session.sessionId)
         return { isValid: false }
       }
