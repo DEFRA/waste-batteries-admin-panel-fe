@@ -6,7 +6,8 @@
  *
  *   /e2e/protected       relies on the server-wide auth default, so it proves
  *                        the "everything is protected unless it opts out"
- *                        behaviour and the redirect-to-sign-in that goes with it
+ *                        behaviour, the redirect-to-sign-in that goes with it,
+ *                        and the default required role (Admin)
  *   /e2e/admin-only      requires the Admin scope, so it proves Entra app
  *                        roles reach hapi's scope check
  *

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-import { signInAtStub, users } from '../../support/entra-stub.js'
+import { entraStub, signInAtStub, users } from '../../support/entra-stub.js'
 import { expectNoTokensInBrowser } from '../../support/invariants.js'
 import { expectSignedInAs, expectSignedOut } from '../../support/journeys.js'
 
@@ -36,15 +36,21 @@ test.describe('Sign in', { tag: '@auth' }, () => {
     )
   })
 
-  test('signs out, and protected pages need signing in again', async ({
+  test('signs out of the app and Entra, and protected pages need signing in again', async ({
     page
   }) => {
     await page.goto('/auth/sign-in')
     await signInAtStub(page, users.admin)
     await expectSignedInAs(page, users.admin.claims.name)
 
+    const endSession = page.waitForRequest(
+      new RegExp(`^${entraStub.origin}/entra/endsession`)
+    )
     await page.getByRole('link', { name: 'Sign out' }).click()
 
+    const endSessionUrl = new URL((await endSession).url())
+    expect(endSessionUrl.searchParams.get('id_token_hint')).toBeTruthy()
+    await expect(page).toHaveURL('/')
     await expectSignedOut(page)
     await page.goto('/e2e/protected')
     await expect(page).toHaveURL(/^http:\/\/localhost:3210\/entra\//)
@@ -53,6 +59,19 @@ test.describe('Sign in', { tag: '@auth' }, () => {
 
 test.describe('App roles', { tag: '@auth' }, () => {
   const adminOnlyPath = '/e2e/admin-only'
+
+  test('needs the required role on routes with no auth options', async ({
+    page
+  }) => {
+    await page.goto('/e2e/protected')
+    await signInAtStub(page, users.noRoles)
+
+    await expect(
+      page.getByRole('heading', {
+        name: 'You do not have access to this service'
+      })
+    ).toBeVisible()
+  })
 
   test('lets a user with the Admin role in', async ({ page }) => {
     await page.goto(adminOnlyPath)

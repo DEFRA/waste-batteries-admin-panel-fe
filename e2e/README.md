@@ -46,7 +46,8 @@ Two routes exist only for these tests, because the application's own pages
 are all deliberately public today:
 
 - `/e2e/protected` takes the server-wide auth default, so it exercises route
-  protection and returning to the page after sign-in.
+  protection, the default required role (`Admin`) and returning to the page
+  after sign-in.
 - `/e2e/admin-only` requires the `Admin` scope, so it proves Entra app roles
   reach hapi's scope check.
 
