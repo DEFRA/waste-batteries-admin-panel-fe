@@ -1,9 +1,12 @@
 // Maps a token set from @defra/hapi-auth-oidc onto the cached session.
-// Claims come from the ID token, which a refresh may not return.
-export function toSession({ accessToken, refreshToken, claims }) {
+// Claims and the ID token come from the ID token, which a refresh may not
+// return — so they are only set when present, and the caller keeps the old ones.
+export function toSession({ accessToken, refreshToken, idToken, claims }) {
   return {
     accessToken,
     refreshToken,
+    // Sent as id_token_hint on sign-out, so Entra ends the right session
+    ...(idToken && { idToken }),
     ...(claims && {
       id: claims.oid,
       displayName: claims.name,

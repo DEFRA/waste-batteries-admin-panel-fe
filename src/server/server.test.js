@@ -54,7 +54,21 @@ describe('#createServer', () => {
       )
     })
 
-    test('Should serve a protected route to an authenticated user', async () => {
+    test('Should serve a protected route to a user with the required role', async () => {
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: '/test/protected',
+        auth: {
+          strategy: 'session',
+          credentials: { sessionId: 'sid', scope: ['Admin'] }
+        }
+      })
+
+      expect(statusCode).toBe(200)
+      expect(result).toBe('protected content')
+    })
+
+    test('Should refuse a protected route to a user without the required role', async () => {
       const { statusCode, result } = await server.inject({
         method: 'GET',
         url: '/test/protected',
@@ -64,8 +78,8 @@ describe('#createServer', () => {
         }
       })
 
-      expect(statusCode).toBe(200)
-      expect(result).toBe('protected content')
+      expect(statusCode).toBe(403)
+      expect(result).toContain('You do not have access to this service')
     })
 
     test('Should render the no-access page when the required scope is missing', async () => {
@@ -96,6 +110,22 @@ describe('#createServer', () => {
 
       expect(statusCode).toBe(200)
     })
+
+    test.each(['/', '/about'])(
+      'Should keep %s available to a user without the required role',
+      async (url) => {
+        const { statusCode } = await server.inject({
+          method: 'GET',
+          url,
+          auth: {
+            strategy: 'session',
+            credentials: { sessionId: 'sid', scope: [] }
+          }
+        })
+
+        expect(statusCode).toBe(200)
+      }
+    )
   })
 
   describe('no-store cache headers', () => {

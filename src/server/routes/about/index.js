@@ -12,8 +12,9 @@ export const about = {
         {
           method: 'GET',
           path: '/about',
-          // Public page — renders signed in or out, nav reflects auth state
-          options: { auth: { mode: 'try' } },
+          // Public page — renders signed in or out, with or without the role.
+          // Naming the strategy skips the default's role check
+          options: { auth: { strategy: 'session', mode: 'try' } },
           ...aboutController
         }
       ])

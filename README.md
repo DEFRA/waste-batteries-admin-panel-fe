@@ -118,6 +118,7 @@ npm run dev
 
 - [How sign-in works](#how-sign-in-works)
 - [Configuration](#configuration)
+- [App Registration](#app-registration)
 - [How this follows the CDP docs](#how-this-follows-the-cdp-docs)
 - [Signing in locally and in CI](#signing-in-locally-and-in-ci)
   - [Why there is a stub](#why-there-is-a-stub)
@@ -134,18 +135,25 @@ npm run dev
 Users sign in with Defra's Entra ID via
 [@defra/hapi-auth-oidc](https://github.com/DEFRA/cdp-libraries/tree/main/packages/hapi-auth-oidc),
 using federated credentials: the service proves its identity to Entra with a
-short-lived AWS STS web identity token instead of a client secret. Every route
-is protected by default by a cookie-backed session strategy, and public routes
-opt out explicitly. Sessions are held server-side, refreshed shortly before the
-access token expires, and capped at `SESSION_ABSOLUTE_TTL` from sign-in.
+short-lived AWS STS web identity token instead of a client secret. Sessions
+are held server-side, refreshed shortly before the access token expires, and
+capped at `SESSION_ABSOLUTE_TTL` from sign-in.
 
 Routes: `/auth/sign-in`, `/auth/callback` (GET, and POST for `form_post`) and
-`/auth/sign-out` (local sign-out only; it does not sign the user out of Entra).
+`/auth/sign-out`. Sign-out drops the session, then sends the user to Entra's
+`end_session_endpoint` (with `id_token_hint`) so their Entra session ends too,
+and Entra returns them to `<APP_BASE_URL>/`. If Entra's discovery document
+cannot be read, the user is still signed out of the service.
 
 Entra app roles assigned to a user arrive in the ID token's `roles` claim and
-become their hapi `scope`, so a route can require one with
-`options: { auth: { access: { scope: ['<role>'] } } }`. A signed-in user
-without the role sees "You do not have access to this service" (403).
+become their hapi `scope`. Every route requires a signed-in user with the
+`ENTRA_REQUIRED_ROLE` app role by default; a signed-in user without it sees
+"You do not have access to this service" (403). Users get the role through
+membership of the security group assigned to it on the App Registration's
+enterprise application. Public routes opt out with `auth: false`, or with
+`auth: { strategy: 'session', mode: 'try' }` to render signed in or out
+(naming the strategy stops hapi merging in the default's role check). A route
+can require a different role with `options: { auth: { access: { scope: ['<role>'] } } }`.
 
 The code is in [src/server/plugins/auth.js](src/server/plugins/auth.js),
 [src/server/auth/](src/server/auth) and
@@ -159,13 +167,39 @@ The code is in [src/server/plugins/auth.js](src/server/plugins/auth.js),
 | `ENTRA_DISCOVERY_URI`      | `https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration`. Defaults to the [local Entra stub](#signing-in-locally-and-in-ci) |
 | `APP_BASE_URL`             | Public base URL; the callback is `<APP_BASE_URL>/auth/callback`                                                                                          |
 | `ENTRA_FEDERATED_AUDIENCE` | Must match the federated credential (default `api://AzureADTokenExchange`)                                                                               |
-| `ENTRA_SCOPES`             | Defaults to `openid profile email offline_access user.read`                                                                                              |
+| `ENTRA_SCOPES`             | Defaults to `openid profile email offline_access user.read`. See [App Registration](#app-registration) before calling a backend                          |
+| `ENTRA_REQUIRED_ROLE`      | App role needed on every route that does not opt out. Defaults to `Admin`; must match the role value on the App Registration                             |
 | `ENTRA_RESPONSE_MODE`      | `form_post` in production (needs HTTPS), omitted locally                                                                                                 |
 | `ENTRA_FEDERATED_MOCKING`  | Local and CI only. On by default outside `NODE_ENV=production`. See [Safeguards](#safeguards)                                                            |
 
 In CDP, set `ENTRA_CLIENT_ID`, `ENTRA_DISCOVERY_URI`, `APP_BASE_URL` and
 `SESSION_COOKIE_PASSWORD` per environment, and never set
 `ENTRA_FEDERATED_MOCKING`.
+
+#### App Registration
+
+Each Entra tenant (`defradev` for dev and test, `defra` for prod) needs an App
+Registration for this service, set up through ServiceNow. Because the app has
+no client secret to fall back on, nobody can sign in until the federated
+credential exists. It needs:
+
+- **Redirect URIs** (web platform): `<APP_BASE_URL>/auth/callback` and
+  `<APP_BASE_URL>/`. Entra only accepts a sign-out `post_logout_redirect_uri`
+  that is a registered redirect URI.
+- **A federated credential** for the CDP AWS STS issuer of each environment
+  (`CDP_JWT_ISSUER`), with the service's IAM role ARN as the subject and
+  `ENTRA_FEDERATED_AUDIENCE` as the audience. See the CDP guide to web identity
+  federated token App Registration setup.
+- **An app role** whose value matches `ENTRA_REQUIRED_ROLE`, allowed for
+  groups, plus the `roles` claim in the token configuration.
+- **A security group** (`AG-...`) assigned to that role on the enterprise
+  application. Users are given access by adding them to the group.
+
+Before the app calls a backend with the user's access token, the App
+Registration also needs `requestedAccessTokenVersion: 2` and a custom scope
+exposed under "Expose an API" (for example `api://<client-id>/<scope>`), and
+`ENTRA_SCOPES` must request that scope in place of `user.read`. Otherwise the
+access token is a Microsoft Graph token, which a backend cannot verify.
 
 #### How this follows the CDP docs
 

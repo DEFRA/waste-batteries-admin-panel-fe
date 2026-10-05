@@ -1,6 +1,7 @@
 import cookie from '@hapi/cookie'
 import { hapiAuthOidcPlugin } from '@defra/hapi-auth-oidc'
 
+import { config } from '#/config/config.js'
 import { getCookieOptions } from '../auth/get-cookie-options.js'
 import { getOidcOptions } from '../auth/oidc-options.js'
 
@@ -10,8 +11,10 @@ import { getOidcOptions } from '../auth/oidc-options.js'
  *   ensureValidToken (federated credentials, no client secret)
  * - session (cookie): cookie-backed session validation with token refresh
  *
- * Every route registered after this plugin is authenticated by default —
- * public routes must opt out explicitly (auth: false or mode: 'try').
+ * Every route registered after this plugin requires a signed-in user with the
+ * required Entra app role by default. Public routes must opt out explicitly
+ * with auth: false, or auth: { strategy: 'session', mode: 'try' } — naming the
+ * strategy stops hapi merging in the default's role check.
  */
 export const auth = {
   plugin: {
@@ -22,7 +25,10 @@ export const auth = {
         { plugin: hapiAuthOidcPlugin, options: getOidcOptions() }
       ])
       server.auth.strategy('session', 'cookie', getCookieOptions())
-      server.auth.default('session')
+      server.auth.default({
+        strategy: 'session',
+        access: { scope: [config.get('auth.requiredRole')] }
+      })
     }
   }
 }

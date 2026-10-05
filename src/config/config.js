@@ -167,6 +167,12 @@ export const config = convict({
     }
   },
   auth: {
+    requiredRole: {
+      doc: 'Entra app role a signed-in user needs to use any route that does not opt out. Must match the role value on the App Registration',
+      format: String,
+      default: 'Admin',
+      env: 'ENTRA_REQUIRED_ROLE'
+    },
     oidc: {
       clientId: {
         doc: 'Entra ID App Registration client (application) id',

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import escape from 'lodash/escape.js'
 
+import { buildEndSessionUrl, postSignOutPath } from '../../auth/end-session.js'
 import { getSafeRedirect } from '../../auth/get-safe-redirect.js'
 import { toSession } from '../../auth/session.js'
 
@@ -37,9 +38,23 @@ export async function callbackController(request, h) {
 }
 
 export async function signOutController(request, h) {
-  if (request.auth.isAuthenticated) {
-    await request.server.app.cache.drop(request.auth.credentials.sessionId)
-  }
   request.cookieAuth.clear()
-  return h.redirect('/')
+
+  if (!request.auth.isAuthenticated) {
+    return h.redirect(postSignOutPath)
+  }
+
+  const { sessionId, idToken } = request.auth.credentials
+  await request.server.app.cache.drop(sessionId)
+
+  // Signed out of the service either way; ending the Entra session as well
+  // stops the next sign-in going straight through without a prompt
+  try {
+    return h.redirect(await buildEndSessionUrl(idToken))
+  } catch (error) {
+    request.logger.error(
+      `Could not end the Entra session, signed out locally only: ${error.message}`
+    )
+    return h.redirect(postSignOutPath)
+  }
 }
