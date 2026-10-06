@@ -14,17 +14,17 @@ Local verification completed on 5 October 2026:
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | `npm run format:check`   | Passed                                                                                                                |
 | `npm run lint`           | Passed                                                                                                                |
-| `npm test`               | Passed: 113 tests in 23 files, including real-library log-capture tests for login, refresh and logout success/failure |
+| `PORT=0 npm test`        | Passed: 116 tests in 23 files, including real-library log-capture tests for login, refresh and logout success/failure |
 | `npm run build:frontend` | Passed; Vite reports a GOV.UK CSS media-query warning                                                                 |
 | `npm run test:e2e`       | Passed: 13 browser tests against the existing Navikt Docker stub                                                      |
 
-The seven log-capture cases also passed with CDP's ECS log format:
+The ten log-capture cases also passed with CDP's ECS log format:
 
 ```bash
 LOG_FORMAT=ecs AWS_EMF_ENVIRONMENT=Local TZ=UTC npx --no-install vitest run src/server/auth/auth-logging.test.js
 ```
 
-The browser journeys cover successful login, protected-route/role denial, a valid return path with its query string, a return value containing a literal tab, an OAuth cancellation response and Entra end-session redirect with application-session invalidation. Cancellation is simulated with the browser's real state/correlation cookie because the stub has no cancellation button. The local app uses memory sessions and HTTP query callbacks; HTTPS `form_post`, live federation and multi-instance Redis remain pending below.
+The browser journeys cover successful login, protected-route/role denial, a valid return path with its query string, malformed return values containing a literal tab or dot segments that produce a protocol-relative path, an OAuth cancellation response and Entra end-session redirect with application-session invalidation. Cancellation is simulated with the browser's real state/correlation cookie because the stub has no cancellation button. The local app uses memory sessions and HTTP query callbacks; HTTPS `form_post`, live federation and multi-instance Redis remain pending below. The unit log-capture cases exercise both GET and POST callbacks, raw provider failures, ordinary request redaction and retained outcome/trace identifiers.
 
 ## Prerequisites for CDP dev
 
@@ -72,9 +72,9 @@ Record the deployed commit, environment, timestamp, request/trace IDs and outcom
 | Safe return                  | Start from a protected URL with a query string; verify it returns there. Test a return value containing a literal tab followed by another slash; the browser must return to `/`.                                                                                                      | Pending |
 | Cancellation/failure         | Cancel/refuse the real Entra flow. Verify the friendly recovery page and retry link without access to protected content.                                                                                                                                                              | Pending |
 | Refresh                      | Continue an assigned user's session near access-token expiry. Verify `auth.refresh` reports `succeeded` and the user retains access. Verify a failed refresh drops the session and emits a sanitized failure event.                                                                   | Pending |
-| Absolute expiry              | In an agreed dev test window, use a short `SESSION_ABSOLUTE_TTL` if needed. Verify refresh/activity cannot extend access past that limit, then restore the accepted configuration.                                                                                                    | Pending |
+| Absolute expiry              | In an agreed dev test window, use a short `SESSION_COOKIE_TTL` if needed. Verify refresh/activity cannot extend access past that limit, then restore the accepted configuration.                                                                                                      | Pending |
 | Logout                       | Sign out. Verify the application cache entry/cookie are invalidated, the browser reaches Entra's end-session endpoint and returns home, and protected access requires a new login. Verify Entra account-selection/logout behaviour with the test accounts.                            | Pending |
 | Multiple tasks/Redis         | Confirm requests from one signed-in browser are handled by more than one application task and remain authenticated through shared Redis. Confirm logout invalidation is respected by each task.                                                                                       | Pending |
-| Logs                         | Check login, denial, refresh, logout and provider-failure requests at the intended logging level. Outcomes and request/trace identifiers must be present; raw credentials, callback queries, logout hints, cookies and provider response/error bodies must be absent.                 | Pending |
+| Logs                         | Check login, denial, refresh, logout and provider-failure requests at the intended logging level. Outcomes and request/trace identifiers must be present; codes, tokens, client assertions, cookies, authentication URLs and raw provider error details must be absent.               | Pending |
 
-The application emits fixed authentication outcomes through the server logger, without request bindings. Upstream OIDC logging is silenced for login, callback and refresh; ordinary request logs redact URLs, query strings, referrers, authorization headers, cookies and response headers. Authentication responses suppress referrers and caching. Trace IDs are included by the existing logger mixin when supplied by the platform.
+The application logs fixed sign-in, refresh and sign-out outcomes through the server logger. Auth-path filtering silences automatic request logs and the OIDC library's sign-in/callback logs; refresh supplies a quiet logger on ordinary routes. Request logs redact URLs, query parameters, referrers, authorization headers, cookies and response headers. Every page is served `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. Trace IDs are included by the existing logger mixin when supplied by the platform.

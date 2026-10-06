@@ -21,16 +21,15 @@ export const loggerOptions = {
   enabled: logConfig.enabled,
   ignorePaths: ['/health'],
   redact: {
+    // Preserve credential redaction even when LOG_REDACT is customized.
     paths: [
-      ...new Set([
-        ...logConfig.redact,
-        'req.headers.authorization',
-        'req.headers.cookie',
-        'req.headers.referer',
-        'req.url',
-        'req.query',
-        'res.headers'
-      ])
+      ...logConfig.redact,
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'req.headers.referer',
+      'req.url',
+      'req.query',
+      'res.headers'
     ],
     remove: true
   },

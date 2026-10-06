@@ -14,29 +14,33 @@ export function getCookieOptions() {
       // meta refresh, and Strict would still drop the cookie on that first hop
       isSameSite: 'Lax'
     },
-    keepAlive: true,
     redirectTo: (request) =>
       `/auth/sign-in?redirect=${encodeURIComponent(request.url.pathname + request.url.search)}`,
     validate: async function (request, session) {
-      const cache = request.server.app.cache
+      const { cache } = request.server.app
       const cached = await cache.get(session.sessionId)
       if (!cached) {
         return { isValid: false }
       }
 
-      // Absolute cap from sign-in — token refresh and cookie keepAlive are
-      // both rolling, so without this a session could live as long as the
-      // refresh token. Fails closed on a missing/invalid createdAt.
+      // Absolute cap from sign-in — token refresh rewrites the cache entry, so
+      // without this a session could live as long as the refresh token.
+      // Fails closed on a missing/invalid createdAt.
       const ageMs = Date.now() - Date.parse(cached.createdAt)
-      if (Number.isNaN(ageMs) || ageMs > config.get('session.absoluteTtl')) {
+      if (Number.isNaN(ageMs) || ageMs > config.get('session.cookie.ttl')) {
         await cache.drop(session.sessionId)
         return { isValid: false }
       }
 
       try {
         // Returns the cached tokens untouched unless the access token is
-        // within a minute of expiry
-        const { token, refreshed } = await request.ensureValidToken(cached)
+        // within a minute of expiry. The quiet logger prevents the library
+        // from logging raw provider errors and credentials on ordinary routes.
+        const { oidc } = request.server.plugins['hapi-auth-oidc']
+        const { token, refreshed } = await oidc.ensureValidToken(
+          { logger: {} },
+          cached
+        )
         if (!refreshed) {
           return { isValid: true, credentials: cached }
         }

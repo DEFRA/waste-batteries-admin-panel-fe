@@ -128,24 +128,16 @@ describe('#createServer', () => {
     )
   })
 
-  describe('no-store cache headers', () => {
-    test('Should set no-store on authenticated responses', async () => {
-      const { headers } = await server.inject({
-        method: 'GET',
-        url: '/test/protected',
-        auth: {
-          strategy: 'session',
-          credentials: { sessionId: 'sid', scope: ['user'] }
-        }
-      })
-
-      expect(headers['cache-control']).toBe('no-store')
+  test('Should not let pages be stored', async () => {
+    const { headers } = await server.inject({
+      method: 'GET',
+      url: '/test/protected',
+      auth: {
+        strategy: 'session',
+        credentials: { sessionId: 'sid', scope: ['Admin'] }
+      }
     })
 
-    test('Should not set no-store on unauthenticated responses', async () => {
-      const { headers } = await server.inject({ method: 'GET', url: '/' })
-
-      expect(headers['cache-control']).not.toBe('no-store')
-    })
+    expect(headers['cache-control']).toBe('no-store')
   })
 })

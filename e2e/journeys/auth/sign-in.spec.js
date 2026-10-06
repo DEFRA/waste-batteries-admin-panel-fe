@@ -36,15 +36,20 @@ test.describe('Sign in', { tag: '@auth' }, () => {
     )
   })
 
-  test('a malformed return URL stays inside the app', async ({ page }) => {
-    await page.goto(
-      `/auth/sign-in?redirect=${encodeURIComponent('/\t/evil.example')}`
-    )
-    await signInAtStub(page, users.admin)
+  for (const redirect of [
+    '/\t/evil.example',
+    '/..//redirect.invalid//evil.example'
+  ]) {
+    test(`a malformed return URL stays inside the app: ${JSON.stringify(redirect)}`, async ({
+      page
+    }) => {
+      await page.goto(`/auth/sign-in?redirect=${encodeURIComponent(redirect)}`)
+      await signInAtStub(page, users.admin)
 
-    await expect(page).toHaveURL('/')
-    await expectSignedInAs(page, users.admin.claims.name)
-  })
+      await expect(page).toHaveURL('/')
+      await expectSignedInAs(page, users.admin.claims.name)
+    })
+  }
 
   test('a cancelled authorization response shows the recovery page without signing in', async ({
     page

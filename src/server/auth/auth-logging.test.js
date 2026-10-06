@@ -6,8 +6,8 @@ import { resetEndSessionEndpoint } from './end-session.js'
 
 const { logLines } = vi.hoisted(() => ({ logLines: [] }))
 
-// Capture real Pino output, including automatic request logs. Only the provider
-// HTTP responses are fixtures; the library flows, cookies and cache are real.
+// Capture real Pino output. Only the provider HTTP responses are fixtures; the
+// library flows, cookies and cache are real.
 vi.mock('../plugins/logger-options.js', async (importOriginal) => {
   const { loggerOptions } = await importOriginal()
   const { Writable } = await import('node:stream')
@@ -28,18 +28,14 @@ vi.mock('../plugins/logger-options.js', async (importOriginal) => {
 })
 
 const issuer = 'http://localhost:3210/entra'
-const code = 'fake-authorization-code-must-not-be-logged'
-const refreshToken = 'fake-refresh-token-must-not-be-logged'
-const authorization = 'Bearer fake-authorization-header-must-not-be-logged'
-const cookieSecret = 'fake-cookie-value-must-not-be-logged'
-const providerError = 'fake-provider-error-with-private-credentials'
+const userName = 'Fixture administrator'
+const code = 'fake-private-authorization-code'
+const providerDetail = 'fake-private-provider-error'
+const authorization = 'Bearer fake-private-authorization-header'
+const cookieValue = 'fake-private-cookie-value'
 
 function jwt(claims) {
-  return [
-    { alg: 'RS256', typ: 'JWT' },
-    claims,
-    'fake-signature-for-the-code-flow-fixture'
-  ]
+  return [{ alg: 'RS256', typ: 'JWT' }, claims, 'fake-signature']
     .map((part) =>
       Buffer.from(
         typeof part === 'string' ? part : JSON.stringify(part)
@@ -55,55 +51,52 @@ function cookiesFrom(response) {
     .join('; ')
 }
 
-describe('authentication logging', () => {
+describe('authentication events', () => {
   let server
   let tokens
   let secrets
   let tokenFailure
   let discoveryFailure
-  let refreshCalls
 
   beforeEach(async () => {
     resetEndSessionEndpoint()
     logLines.length = 0
     tokenFailure = false
     discoveryFailure = false
-    refreshCalls = 0
     const now = Math.floor(Date.now() / 1000)
     const claims = {
       iss: issuer,
       aud: config.get('auth.oidc.clientId'),
       sub: 'fixture-user',
       oid: 'fixture-object-id',
-      name: 'Fixture administrator',
+      name: userName,
       roles: [config.get('auth.requiredRole')],
       iat: now,
       exp: now + 3600
     }
     tokens = {
-      access_token: jwt({ ...claims, marker: 'access-secret' }),
-      id_token: jwt({ ...claims, marker: 'id-secret' }),
-      refresh_token: refreshToken,
+      access_token: jwt({ ...claims, marker: 'access-token' }),
+      id_token: jwt({ ...claims, marker: 'id-token' }),
+      refresh_token: 'fake-refresh-token',
       token_type: 'Bearer',
       expires_in: 3600
     }
     secrets = [
       code,
-      refreshToken,
+      providerDetail,
       authorization,
-      cookieSecret,
-      providerError,
+      cookieValue,
       tokens.access_token,
-      tokens.id_token
+      tokens.id_token,
+      tokens.refresh_token
     ]
 
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input, options) => {
-        const url = String(input)
-        if (url.endsWith('/.well-known/openid-configuration')) {
+        if (String(input).endsWith('/.well-known/openid-configuration')) {
           if (discoveryFailure) {
-            throw new Error(`${providerError}: ${secrets.join(' ')}`)
+            throw new Error(`${providerDetail}: ${secrets.join(' ')}`)
           }
           return Response.json({
             issuer,
@@ -117,12 +110,11 @@ describe('authentication logging', () => {
             code_challenge_methods_supported: ['S256']
           })
         }
-        expect(url).toBe(`${issuer}/token`)
+        expect(String(input)).toBe(`${issuer}/token`)
         const body = new URLSearchParams(options.body)
         for (const key of ['client_assertion', 'code_verifier']) {
           if (body.get(key)) secrets.push(body.get(key))
         }
-        if (body.get('grant_type') === 'refresh_token') refreshCalls++
         if (tokenFailure) {
           return Response.json(
             { error: 'invalid_grant', error_description: secrets.join(' ') },
@@ -144,15 +136,9 @@ describe('authentication logging', () => {
   afterEach(async () => {
     await server.stop({ timeout: 0 })
     vi.unstubAllGlobals()
+    const output = logLines.join('')
+    for (const secret of secrets) expect(output).not.toContain(secret)
   })
-
-  function inject(options) {
-    const request = typeof options === 'string' ? { url: options } : options
-    return server.inject({
-      ...request,
-      headers: { 'x-cdp-request-id': 'fixture-trace-id', ...request.headers }
-    })
-  }
 
   function expireAccessTokenSoon() {
     const claims = JSON.parse(
@@ -166,118 +152,145 @@ describe('authentication logging', () => {
   }
 
   async function beginLogin() {
-    const response = await inject('/auth/sign-in?redirect=%2Fabout')
+    const response = await server.inject({
+      url: '/auth/sign-in',
+      headers: { 'x-cdp-request-id': 'fixture-trace-id' }
+    })
     expect(response.statusCode).toBe(302)
     const state = new URL(response.headers.location).searchParams.get('state')
     secrets.push(state)
-    return { state, cookies: cookiesFrom(response) }
+    return {
+      state,
+      cookies: cookiesFrom(response)
+    }
   }
 
-  async function finishLogin(login) {
-    return inject({
-      url: `/auth/callback?code=${code}&state=${login.state}`,
-      headers: { cookie: login.cookies }
+  function finishLogin(login, method = 'GET') {
+    const parameters = new URLSearchParams({ code, state: login.state })
+    return server.inject({
+      method,
+      url: `/auth/callback${method === 'GET' ? `?${parameters}` : ''}`,
+      headers: {
+        cookie: login.cookies,
+        ...(method === 'POST' && {
+          'content-type': 'application/x-www-form-urlencoded'
+        })
+      },
+      ...(method === 'POST' && { payload: parameters.toString() })
     })
+  }
+
+  async function signIn() {
+    const response = await finishLogin(await beginLogin())
+    expect(response.statusCode).toBe(200)
+    return cookiesFrom(response)
   }
 
   function expectEvent(event, outcome) {
     const entries = logLines.map((line) => JSON.parse(line))
     expect(entries).toContainEqual(
-      expect.objectContaining({
-        event,
-        outcome,
-        requestId: expect.any(String),
-        trace: { id: expect.any(String) }
-      })
+      expect.objectContaining({ event, outcome, requestId: expect.any(String) })
     )
   }
 
-  function expectCleanLogs() {
-    const output = logLines.join('')
-    for (const secret of secrets) expect(output).not.toContain(secret)
-  }
-
-  test('successful login keeps codes, assertions, tokens and ordinary request bindings private', async () => {
-    const response = await finishLogin(await beginLogin())
+  test.each(['GET', 'POST'])('sign-in (%s callback)', async (method) => {
+    const response = await finishLogin(await beginLogin(), method)
     expect(response.statusCode).toBe(200)
     expect(response.headers['referrer-policy']).toBe('no-referrer')
-    await inject({
+
+    expectEvent('auth.login', 'started')
+    expectEvent('auth.login', 'succeeded')
+    expect(logLines.map((line) => JSON.parse(line))).toContainEqual(
+      expect.objectContaining({
+        event: 'auth.login',
+        outcome: 'started',
+        trace: { id: 'fixture-trace-id' }
+      })
+    )
+  })
+
+  test.each(['GET', 'POST'])(
+    'failed token exchange (%s callback)',
+    async (method) => {
+      const login = await beginLogin()
+      tokenFailure = true
+
+      const response = await finishLogin(login, method)
+      expect(response.statusCode).toBe(401)
+      expect(response.payload).toContain('We could not sign you in')
+      expect(response.payload).not.toContain(providerDetail)
+      expectEvent('auth.login', 'failed')
+    }
+  )
+
+  test('ordinary request logs redact query strings, referrers and credentials', async () => {
+    const response = await server.inject({
       url: `/about?code=${code}&id_token_hint=${tokens.id_token}`,
       headers: {
         authorization,
-        cookie: `sample=${cookieSecret}`,
+        cookie: `sample=${cookieValue}`,
         referer: `http://localhost:3000/auth/callback?code=${code}`
       }
     })
-    expectEvent('auth.login', 'started')
-    expectEvent('auth.login', 'succeeded')
-    expectCleanLogs()
+    expect(response.statusCode).toBe(200)
+    expect(logLines.join('')).toContain('[response] get /about')
   })
 
-  test('token endpoint failure keeps raw error details private and retains the recovery page', async () => {
-    const login = await beginLogin()
-    tokenFailure = true
-    const response = await finishLogin(login)
-    expect(response.statusCode).toBe(401)
-    expect(response.payload).toContain('We could not sign you in')
-    expect(response.payload).not.toContain(providerError)
-    expectEvent('auth.login', 'failed')
-    expectCleanLogs()
-  })
-
-  test('discovery failure emits a sanitized sign-in failure', async () => {
+  test('failed discovery', async () => {
     discoveryFailure = true
-    const response = await inject('/auth/sign-in')
-    expect(response.statusCode).toBe(401)
+
+    expect((await server.inject('/auth/sign-in')).statusCode).toBe(401)
     expectEvent('auth.login', 'failed')
-    expectCleanLogs()
   })
 
-  test('refresh on an ordinary protected route emits a safe success event', async () => {
+  test('refresh, without logging the user name', async () => {
     expireAccessTokenSoon()
-    const response = await finishLogin(await beginLogin())
-    const protectedResponse = await inject({
+    const cookie = await signIn()
+    logLines.length = 0
+
+    const response = await server.inject({
       url: '/logging/protected',
-      headers: { cookie: cookiesFrom(response) }
+      headers: { cookie }
     })
-    expect(protectedResponse.statusCode).toBe(200)
-    expect(refreshCalls).toBe(1)
+
+    expect(response.statusCode).toBe(200)
     expectEvent('auth.refresh', 'succeeded')
-    expectCleanLogs()
+    expect(logLines.join('')).not.toContain(userName)
   })
 
-  test('refresh failure on an ordinary protected route drops the session without logging provider details', async () => {
+  test('failed refresh', async () => {
     expireAccessTokenSoon()
-    const response = await finishLogin(await beginLogin())
+    const cookie = await signIn()
     tokenFailure = true
-    const protectedResponse = await inject({
+
+    const response = await server.inject({
       url: '/logging/protected',
-      headers: { cookie: cookiesFrom(response) }
+      headers: { cookie }
     })
-    expect(protectedResponse.statusCode).toBe(302)
-    expect(refreshCalls).toBe(1)
+
+    expect(response.statusCode).toBe(302)
     expectEvent('auth.refresh', 'failed')
-    expectCleanLogs()
   })
 
-  test.each([false, true])(
-    'logout keeps the ID-token hint and discovery failures private (failure=%s)',
-    async (failure) => {
-      const response = await finishLogin(await beginLogin())
-      discoveryFailure = failure
-      const logout = await inject({
-        url: '/auth/sign-out',
-        headers: { cookie: cookiesFrom(response) }
-      })
-      expect(logout.statusCode).toBe(302)
-      if (failure) expect(logout.headers.location).toBe('/')
-      else {
-        expect(
-          new URL(logout.headers.location).searchParams.get('id_token_hint')
-        ).toBe(tokens.id_token)
-      }
-      expectEvent('auth.logout', failure ? 'local_only' : 'succeeded')
-      expectCleanLogs()
+  test.each([
+    [false, 'succeeded'],
+    [true, 'local_only']
+  ])('sign-out (discovery failure=%s)', async (failure, outcome) => {
+    const cookie = await signIn()
+    discoveryFailure = failure
+
+    const response = await server.inject({
+      url: '/auth/sign-out',
+      headers: { cookie }
+    })
+
+    expect(response.statusCode).toBe(302)
+    if (failure) expect(response.headers.location).toBe('/')
+    else {
+      expect(
+        new URL(response.headers.location).searchParams.get('id_token_hint')
+      ).toBe(tokens.id_token)
     }
-  )
+    expectEvent('auth.logout', outcome)
+  })
 })

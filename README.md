@@ -138,7 +138,7 @@ Users sign in with Defra's Entra ID via
 using federated credentials: the service proves its identity to Entra with a
 short-lived AWS STS web identity token instead of a client secret. Sessions
 are held server-side, refreshed shortly before the access token expires, and
-capped at `SESSION_ABSOLUTE_TTL` from sign-in.
+capped at `SESSION_COOKIE_TTL` from sign-in.
 
 Routes: `/auth/sign-in`, `/auth/callback` (GET, and POST for `form_post`) and
 `/auth/sign-out`. Sign-out drops the session, then sends the user to Entra's

@@ -6,6 +6,7 @@ function buildRequest(cached, ensureValidToken = vi.fn()) {
   return {
     server: {
       logger: { info: vi.fn() },
+      plugins: { 'hapi-auth-oidc': { oidc: { ensureValidToken } } },
       app: {
         cache: {
           get: vi.fn().mockResolvedValue(cached),
@@ -14,11 +15,12 @@ function buildRequest(cached, ensureValidToken = vi.fn()) {
         }
       }
     },
-    ensureValidToken,
     info: { id: 'request-1' },
     logger: { info: vi.fn() }
   }
 }
+
+const oidcOf = (request) => request.server.plugins['hapi-auth-oidc'].oidc
 
 function freshSession(overrides = {}) {
   return {
@@ -67,7 +69,11 @@ describe('#getCookieOptions', () => {
         isValid: true,
         credentials: cached
       })
-      expect(request.ensureValidToken).toHaveBeenCalledWith(cached)
+      // Empty logger: the library would log the user's name on refresh
+      expect(oidcOf(request).ensureValidToken).toHaveBeenCalledWith(
+        { logger: {} },
+        cached
+      )
       expect(request.server.app.cache.set).not.toHaveBeenCalled()
     })
 
@@ -130,7 +136,7 @@ describe('#getCookieOptions', () => {
       expect(request.server.app.cache.drop).toHaveBeenCalledWith('sid')
     })
 
-    test('Should drop the session once past the absolute session ttl', async () => {
+    test('Should drop the session once past the session cookie ttl', async () => {
       const request = buildRequest(
         freshSession({
           createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString()
@@ -141,7 +147,7 @@ describe('#getCookieOptions', () => {
         isValid: false
       })
       expect(request.server.app.cache.drop).toHaveBeenCalledWith('sid')
-      expect(request.ensureValidToken).not.toHaveBeenCalled()
+      expect(oidcOf(request).ensureValidToken).not.toHaveBeenCalled()
     })
 
     test('Should treat a session without createdAt as expired', async () => {

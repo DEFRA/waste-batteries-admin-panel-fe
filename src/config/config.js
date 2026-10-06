@@ -140,7 +140,7 @@ export const config = convict({
     },
     cookie: {
       ttl: {
-        doc: 'Session cookie ttl',
+        doc: 'Session cookie ttl, also the hard limit on a signed-in session from sign-in',
         format: Number,
         default: fourHoursMs,
         env: 'SESSION_COOKIE_TTL'
@@ -158,12 +158,6 @@ export const config = convict({
         default: isProduction,
         env: 'SESSION_COOKIE_SECURE'
       }
-    },
-    absoluteTtl: {
-      doc: 'Hard ceiling on a signed-in session, measured from sign-in; cookie keep-alive cannot extend a session past it',
-      format: Number,
-      default: fourHoursMs,
-      env: 'SESSION_ABSOLUTE_TTL'
     }
   },
   auth: {

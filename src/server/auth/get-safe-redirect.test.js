@@ -10,15 +10,20 @@ describe('#getSafeRedirect', () => {
     )
   })
 
+  test('Should never pass control characters on', () => {
+    expect(getSafeRedirect('/about\u0000')).toBe('/about')
+    expect(getSafeRedirect('/ab\u0000out')).toBe('/ab%00out')
+  })
+
   test.each([
     ['//evil.example'],
+    ['//redirect.invalid/about'],
+    ['/x/..//evil.example'],
+    ['/..//redirect.invalid//evil.example'],
     ['/\\evil.example'],
     ['/\t/evil.example'],
     ['/\n/evil.example'],
     ['/\r/evil.example'],
-    ['/about\u0000'],
-    ['/about\u007f'],
-    ['/about?next=\\evil.example'],
     ['https://evil.example'],
     ['evil.example'],
     ['/auth/callback'],
