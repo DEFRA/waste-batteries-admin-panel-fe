@@ -19,8 +19,8 @@ services:
     networks:
       - cdp-tenant
 
-  # Local and CI stand-in for Entra ID, for signing in to the app when it runs
-  # with ENTRA_FEDERATED_MOCKING. Never used in CDP. Discovery is at
+  # Local and CI stand-in for Entra ID; accepts any client secret. Never used
+  # in CDP. Discovery is at
   # http://localhost:3210/entra/.well-known/openid-configuration.
   # See "Signing in locally and in CI" in the README
   entra-stub:
@@ -87,6 +87,7 @@ services:
       SESSION_COOKIE_SECURE: false
       USE_SINGLE_INSTANCE_CACHE: true
       REDIS_TLS: false
+      ENTRA_CLIENT_SECRET: local-client-secret
     networks:
       - cdp-tenant
 

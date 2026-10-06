@@ -8,7 +8,7 @@ import { getOidcOptions } from '../auth/oidc-options.js'
 /**
  * Registers Entra ID sign-in and the session auth strategy:
  * - hapi-auth-oidc: decorates the request with login, callback and
- *   ensureValidToken (federated credentials, no client secret)
+ *   ensureValidToken, authenticating to Entra with the client secret
  * - session (cookie): cookie-backed session validation with token refresh
  *
  * Every route registered after this plugin requires a signed-in user with the

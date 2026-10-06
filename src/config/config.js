@@ -200,19 +200,13 @@ export const config = convict({
         env: 'ENTRA_RESPONSE_MODE'
       }
     },
-    federatedCredentials: {
-      audience: {
-        doc: 'Audience of the AWS STS web identity token; must match the federated credential on the App Registration',
-        format: String,
-        default: 'api://AzureADTokenExchange',
-        env: 'ENTRA_FEDERATED_AUDIENCE'
-      },
-      enableMocking: {
-        doc: 'Send a fake client assertion, which only the local Entra stub accepts, instead of an AWS STS web identity token. Local development and CI only; the app refuses to start with it on in CDP',
-        format: Boolean,
-        default: !isProduction,
-        env: 'ENTRA_FEDERATED_MOCKING'
-      }
+    clientSecret: {
+      doc: 'Entra ID App Registration client secret. Set as a CDP secret; required in production. The local default is only accepted by the Entra stub in compose.yml',
+      format: String,
+      nullable: true,
+      default: isProduction ? null : 'local-client-secret',
+      sensitive: true,
+      env: 'ENTRA_CLIENT_SECRET'
     }
   },
   redis: {

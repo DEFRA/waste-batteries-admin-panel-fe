@@ -24,12 +24,12 @@ export const appInstances = {
       // deliberately public — so the harness adds one. See test-server.js
       E2E_PROTECTED_ROUTES: 'true',
       PORT: String(port),
-      // Sign in against the local Entra stub, with the fake client assertion
-      // it accepts. Both are the non-production defaults; set here so the
-      // suite does not depend on them
+      // Sign in against the local Entra stub, which accepts any client
+      // secret. Both are the non-production defaults; set here so the suite
+      // does not depend on them
       APP_BASE_URL: `http://localhost:${port}`,
       ENTRA_DISCOVERY_URI: entraStub.discoveryUri,
-      ENTRA_FEDERATED_MOCKING: 'true'
+      ENTRA_CLIENT_SECRET: 'local-client-secret'
     }
   }
 }

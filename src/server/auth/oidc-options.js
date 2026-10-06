@@ -1,7 +1,4 @@
-import { WebIdentityTokenProvider } from '@defra/hapi-auth-oidc'
-
 import { config } from '#/config/config.js'
-import { createLocalMockProvider } from './local-mock-provider.js'
 
 export const callbackPath = '/auth/callback'
 
@@ -12,23 +9,22 @@ export function getCallbackSameSite() {
 }
 
 export function getOidcOptions() {
-  const { oidc, federatedCredentials } = config.get('auth')
+  const { oidc, clientSecret } = config.get('auth')
+  if (!clientSecret) {
+    throw new Error('ENTRA_CLIENT_SECRET must be set')
+  }
 
   return {
     oidc: {
       ...oidc,
       useHttp: !config.get('isProduction'),
       loginCallbackUri: callbackPath,
-      // CDP: an AWS STS web identity token, as the federated credentials docs
-      // describe. Local and CI only: a fake one the Entra stub accepts
-      authProvider: federatedCredentials.enableMocking
-        ? createLocalMockProvider({
-            clientId: oidc.clientId,
-            audience: federatedCredentials.audience
-          })
-        : new WebIdentityTokenProvider({
-            audience: [federatedCredentials.audience]
-          })
+      // The library's client secret provider shape: sent to Entra's token
+      // endpoint as client_secret_post
+      authProvider: {
+        type: 'client_secret',
+        getCredentials: async (_logger) => clientSecret
+      }
     },
     cookieOptions: {
       password: config.get('session.cookie.password'),

@@ -112,7 +112,7 @@ describe('authentication events', () => {
         }
         expect(String(input)).toBe(`${issuer}/token`)
         const body = new URLSearchParams(options.body)
-        for (const key of ['client_assertion', 'code_verifier']) {
+        for (const key of ['client_secret', 'code_verifier']) {
           if (body.get(key)) secrets.push(body.get(key))
         }
         if (tokenFailure) {
