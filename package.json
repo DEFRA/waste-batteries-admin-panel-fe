@@ -72,7 +72,7 @@
     "@babel/preset-env": "7.29.2",
     "@defra/hapi-connect": "1.0.1",
     "@playwright/test": "1.62.1",
-    "@vitest/coverage-v8": "4.1.8",
+    "@vitest/coverage-v8": "4.1.11",
     "cheerio": "1.2.0",
     "eslint": "9.39.2",
     "husky": "9.1.7",
@@ -85,6 +85,6 @@
     "stylelint": "16.26.1",
     "stylelint-config-gds": "2.0.0",
     "vite": "8.0.16",
-    "vitest": "4.1.8"
+    "vitest": "4.1.11"
   }
 }
