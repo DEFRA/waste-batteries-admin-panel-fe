@@ -1,14 +1,26 @@
-// Only allow relative single-slash paths as post-sign-in redirects.
-// "//evil.example" and "/\evil.example" are both absolute to a browser.
+const origin = 'https://redirect.invalid'
+
+// A same-site path to return to after sign-in, or '/'. Parsing against a fixed
+// origin catches anything that would leave the site (//evil, /\evil, tabs the
+// URL parser strips). The auth routes are excluded so sign-in cannot loop.
 export function getSafeRedirect(value) {
-  if (typeof value !== 'string') {
+  if (
+    typeof value !== 'string' ||
+    !value.startsWith('/') ||
+    value.startsWith('//')
+  ) {
     return '/'
   }
-  if (!value.startsWith('/')) {
-    return '/'
-  }
-  if (value.startsWith('//') || value.startsWith('/\\')) {
-    return '/'
-  }
-  return value
+  try {
+    const url = new URL(value, origin)
+    const pathname = decodeURIComponent(url.pathname)
+    if (
+      url.origin === origin &&
+      !url.pathname.startsWith('//') &&
+      !/^\/auth(\/|$)/i.test(pathname)
+    ) {
+      return url.pathname + url.search
+    }
+  } catch {}
+  return '/'
 }

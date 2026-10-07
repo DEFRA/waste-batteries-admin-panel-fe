@@ -1,112 +1,144 @@
 import { test, expect } from '@playwright/test'
 
-import {
-  signInFromHeader,
-  expectSignedInAs,
-  expectAtIdentityProvider
-} from '../../support/journeys.js'
-import {
-  expectNoTokensInBrowser,
-  expectNoTokensInLogs,
-  looksLikeAJwt,
-  sessionCookieName
-} from '../../support/invariants.js'
-import {
-  findCookie,
-  redirectTarget,
-  setCookieHeaderFor
-} from '../../support/http.js'
-import { readAppLog, waitForLogLine } from '../../support/app-log.js'
-import { operatorUser } from '../../support/users.js'
+import { entraStub, signInAtStub, users } from '../../support/entra-stub.js'
+import { expectNoTokensInBrowser } from '../../support/invariants.js'
+import { expectSignedInAs, expectSignedOut } from '../../support/journeys.js'
 
 /**
- * Manual checklist phase 2 — the main event.
- *
- * Split in two: the outbound authorize request, which is easiest to assert on
- * as a raw 302, and the journey a person actually takes.
+ * Signing in through the real sign-in and callback routes, against the local
+ * Entra ID stub. Everything on the app side is what runs in CDP; only the
+ * identity provider and the client assertion are stand-ins.
  */
-test.describe('Sign-in journey', { tag: '@auth' }, () => {
-  test('sends Defra ID an authorize request with the parameters it requires', async ({
-    request
-  }) => {
-    const response = await request.get('/auth/sign-in', { maxRedirects: 0 })
-
-    expect(response.status()).toBe(302)
-
-    const target = redirectTarget(response)
-    expect(target.origin).toBe('http://localhost:3200')
-    expect(target.pathname).toContain('/authorize')
-
-    expect(target.searchParams.get('serviceId')).toBe('stub-service-id')
-    expect(target.searchParams.get('client_id')).toBe(
-      '63983fc2-cfff-45bb-8ec2-959e21062b9a'
-    )
-    expect(target.searchParams.get('scope')).toBe('openid offline_access')
-    expect(target.searchParams.get('response_type')).toBe('code')
-    expect(target.searchParams.get('state')).toBeTruthy()
-
-    // The stub rejects an explicit response_mode, and the code flow returns
-    // via the query string by default anyway
-    expect(target.searchParams.has('response_mode')).toBe(false)
-
-    // The OAuth transaction cookie has to survive the redirect back from the
-    // identity provider, so it cannot be SameSite=Strict
-    const transactionCookie = setCookieHeaderFor(response, 'bell-defra-id')
-    expect(transactionCookie).toBeDefined()
-    expect(transactionCookie).toContain('SameSite=Lax')
-  })
-
-  test('takes a user from the header link to a signed-in home page', async ({
+test.describe('Sign in', { tag: '@auth' }, () => {
+  test('signs in from the header and shows who is signed in', async ({
     page
   }) => {
     await page.goto('/')
+    await expectSignedOut(page)
+
     await page.getByRole('link', { name: 'Sign in' }).click()
-    await expectAtIdentityProvider(page)
+    await signInAtStub(page, users.admin)
 
-    await page
-      .getByRole('row', { name: operatorUser.email })
-      .getByRole('link', { name: 'Log in' })
-      .click()
-
-    await page.waitForURL('**/')
-    await expectSignedInAs(page, operatorUser)
-  })
-
-  test('stores the session in an opaque cookie, never a token in the browser', async ({
-    page,
-    baseURL
-  }) => {
-    await signInFromHeader(page, operatorUser)
-
-    const sessionCookie = await findCookie(page.context(), sessionCookieName)
-
-    expect(sessionCookie).toBeDefined()
-    expect(sessionCookie.httpOnly).toBe(true)
-    expect(sessionCookie.sameSite).toBe('Lax')
-    expect(sessionCookie.path).toBe('/')
-    expect(
-      looksLikeAJwt(sessionCookie.value),
-      'the session cookie should be an opaque encrypted blob'
-    ).toBe(false)
-
-    // Bell's transaction cookie is finished with once the callback completes
-    expect(await findCookie(page.context(), 'bell-defra-id')).toBeUndefined()
-
+    await expect(page).toHaveURL('/')
+    await expectSignedInAs(page, users.admin.claims.name)
     await expectNoTokensInBrowser(page)
-    expectNoTokensInLogs(await readAppLog(baseURL))
   })
 
-  test('marks authenticated pages no-store and logs the sign-in without tokens', async ({
-    page,
-    baseURL
+  test('returns to the protected page the user was heading for', async ({
+    page
   }) => {
-    await signInFromHeader(page, operatorUser)
+    await page.goto('/e2e/protected?tab=details')
+    await signInAtStub(page, users.admin)
 
-    const response = await page.goto('/')
-    expect(response.headers()['cache-control']).toBe('no-store')
+    await expect(page).toHaveURL('/e2e/protected?tab=details')
+    await expect(page.getByTestId('e2e-page-heading')).toHaveText(
+      'Protected page'
+    )
+  })
 
-    const log = await waitForLogLine(baseURL, 'User authenticated')
-    expect(log).toContain('correlationId')
-    expectNoTokensInLogs(log)
+  for (const redirect of [
+    '/\t/evil.example',
+    '/..//redirect.invalid//evil.example'
+  ]) {
+    test(`a malformed return URL stays inside the app: ${JSON.stringify(redirect)}`, async ({
+      page
+    }) => {
+      await page.goto(`/auth/sign-in?redirect=${encodeURIComponent(redirect)}`)
+      await signInAtStub(page, users.admin)
+
+      await expect(page).toHaveURL('/')
+      await expectSignedInAs(page, users.admin.claims.name)
+    })
+  }
+
+  test('a cancelled authorization response shows the recovery page without signing in', async ({
+    page
+  }) => {
+    const authorization = page.waitForRequest((request) => {
+      const url = new URL(request.url())
+      return (
+        url.origin === entraStub.origin && url.pathname === '/entra/authorize'
+      )
+    })
+    await page.goto('/auth/sign-in')
+    const parameters = new URL((await authorization).url()).searchParams
+    const callback = new URL(parameters.get('redirect_uri'))
+    callback.searchParams.set('state', parameters.get('state'))
+    callback.searchParams.set('error', 'access_denied')
+    callback.searchParams.set(
+      'error_description',
+      'fake-private-error-description'
+    )
+
+    // The stub has no cancellation button; simulate its OAuth error redirect
+    // while retaining the real browser correlation cookie and state.
+    const response = await page.goto(callback.toString())
+    expect(response.status()).toBe(401)
+    await expect(
+      page.getByRole('heading', { name: 'We could not sign you in' })
+    ).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: 'Try signing in again' })
+    ).toBeVisible()
+    expect(await page.content()).not.toContain('fake-private-error-description')
+    await page.goto('/')
+    await expectSignedOut(page)
+  })
+
+  test('signs out of the app and Entra, and protected pages need signing in again', async ({
+    page
+  }) => {
+    await page.goto('/auth/sign-in')
+    await signInAtStub(page, users.admin)
+    await expectSignedInAs(page, users.admin.claims.name)
+
+    const endSession = page.waitForRequest(
+      new RegExp(`^${entraStub.origin}/entra/endsession`)
+    )
+    await page.getByRole('link', { name: 'Sign out' }).click()
+
+    const endSessionUrl = new URL((await endSession).url())
+    expect(endSessionUrl.searchParams.get('id_token_hint')).toBeTruthy()
+    await expect(page).toHaveURL('/')
+    await expectSignedOut(page)
+    await page.goto('/e2e/protected')
+    await expect(page).toHaveURL(/^http:\/\/localhost:3210\/entra\//)
+  })
+})
+
+test.describe('App roles', { tag: '@auth' }, () => {
+  const adminOnlyPath = '/e2e/admin-only'
+
+  test('needs the required role on routes with no auth options', async ({
+    page
+  }) => {
+    await page.goto('/e2e/protected')
+    await signInAtStub(page, users.noRoles)
+
+    await expect(
+      page.getByRole('heading', {
+        name: 'You do not have access to this service'
+      })
+    ).toBeVisible()
+  })
+
+  test('lets a user with the Admin role in', async ({ page }) => {
+    await page.goto(adminOnlyPath)
+    await signInAtStub(page, users.admin)
+
+    await expect(page).toHaveURL(adminOnlyPath)
+    await expect(page.getByTestId('e2e-page-heading')).toHaveText('Admin page')
+  })
+
+  test('shows the no-access page to a user without it', async ({ page }) => {
+    await page.goto(adminOnlyPath)
+    await signInAtStub(page, users.noRoles)
+
+    await expect(
+      page.getByRole('heading', {
+        name: 'You do not have access to this service'
+      })
+    ).toBeVisible()
+    await expectSignedInAs(page, users.noRoles.claims.name)
   })
 })

@@ -13,7 +13,6 @@ import { requestLogger } from './plugins/request-logger.js'
 import { sessionCache } from './plugins/session-cache.js'
 import { staticAssets } from './plugins/static-assets.js'
 import { auth } from './plugins/auth.js'
-import { noStore } from './common/helpers/no-store.js'
 import { getCacheEngine } from './common/helpers/session-cache/cache-engine.js'
 import { secureContext } from '@defra/hapi-secure-context'
 import { contentSecurityPolicy } from './plugins/content-security-policy.js'
@@ -32,6 +31,11 @@ export async function createServer() {
       files: {
         relativeTo: path.resolve(config.get('root'), '.public')
       },
+      // Pages may show signed-in content, so never store them. Static assets
+      // set their own cache policy
+      cache: {
+        otherwise: 'no-store'
+      },
       security: {
         hsts: {
           maxAge: 31536000,
@@ -40,7 +44,8 @@ export async function createServer() {
         },
         xss: 'enabled',
         noSniff: true,
-        xframe: true
+        xframe: true,
+        referrer: 'no-referrer'
       }
     },
     router: {
@@ -57,10 +62,10 @@ export async function createServer() {
     }
   })
 
-  // Server-side Defra ID auth session store (memory locally, Redis in environments)
+  // Server-side auth session store (memory locally, Redis in environments)
   server.app.cache = server.cache({
     cache: config.get('session.cache.name'),
-    segment: 'defra-id-session',
+    segment: 'auth-session',
     expiresIn: config.get('session.cache.ttl')
   })
 
@@ -86,7 +91,6 @@ export async function createServer() {
   ])
 
   server.ext('onPreResponse', catchAll)
-  server.ext('onPreResponse', noStore)
 
   return server
 }

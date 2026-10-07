@@ -1,9 +1,6 @@
 import { config } from '#/config/config.js'
-import { refreshTokens } from './refresh-tokens.js'
-import { verifyToken } from './verify-token.js'
-import { buildUserProfile } from './user-profile.js'
-
-const refreshWindowMs = 60 * 1000
+import { toSession } from './session.js'
+import { logAuthEvent } from './log-auth-event.js'
 
 export function getCookieOptions() {
   return {
@@ -13,52 +10,53 @@ export function getCookieOptions() {
       path: '/',
       ttl: config.get('session.cookie.ttl'),
       isSecure: config.get('session.cookie.secure'),
-      // Lax, not Strict — the cookie must survive the redirect back from the IdP
+      // Lax, not Strict — the callback redirects back into the service with a
+      // meta refresh, and Strict would still drop the cookie on that first hop
       isSameSite: 'Lax'
     },
-    keepAlive: true,
     redirectTo: (request) =>
       `/auth/sign-in?redirect=${encodeURIComponent(request.url.pathname + request.url.search)}`,
     validate: async function (request, session) {
-      const cached = await request.server.app.cache.get(session.sessionId)
+      const { cache } = request.server.app
+      const cached = await cache.get(session.sessionId)
       if (!cached) {
         return { isValid: false }
       }
 
-      // Absolute cap from sign-in — token refresh and cookie keepAlive are
-      // both rolling, so without this a session could live as long as the
-      // refresh token (24 h). Fails closed on a missing/invalid createdAt.
+      // Absolute cap from sign-in — token refresh rewrites the cache entry, so
+      // without this a session could live as long as the refresh token.
+      // Fails closed on a missing/invalid createdAt.
       const ageMs = Date.now() - Date.parse(cached.createdAt)
-      if (Number.isNaN(ageMs) || ageMs > config.get('session.absoluteTtl')) {
-        await request.server.app.cache.drop(session.sessionId)
+      if (Number.isNaN(ageMs) || ageMs > config.get('session.cookie.ttl')) {
+        await cache.drop(session.sessionId)
         return { isValid: false }
       }
 
-      if (Date.parse(cached.expiresAt) - Date.now() > refreshWindowMs) {
-        return { isValid: true, credentials: cached }
-      }
-
-      // Close to expiry — refresh proactively so no request fails on expiry
       try {
-        const tokens = await refreshTokens(cached.refreshToken)
-        const claims = await verifyToken(tokens.access_token)
+        // Returns the cached tokens untouched unless the access token is
+        // within a minute of expiry. The quiet logger prevents the library
+        // from logging raw provider errors and credentials on ordinary routes.
+        const { oidc } = request.server.plugins['hapi-auth-oidc']
+        const { token, refreshed } = await oidc.ensureValidToken(
+          { logger: {} },
+          cached
+        )
+        if (!refreshed) {
+          return { isValid: true, credentials: cached }
+        }
+
         const updated = {
           ...cached,
-          ...buildUserProfile(claims, tokens.id_token),
-          accessToken: tokens.access_token,
-          // B2C may not rotate the refresh token; keep the old one if it doesn't
-          refreshToken: tokens.refresh_token ?? cached.refreshToken,
-          expiresAt: new Date(
-            Date.now() + Number(tokens.expires_in) * 1000
-          ).toISOString()
+          ...toSession(token),
+          // Entra may not rotate the refresh token; keep the old one if it doesn't
+          refreshToken: token.refreshToken ?? cached.refreshToken
         }
-        await request.server.app.cache.set(session.sessionId, updated)
+        await cache.set(session.sessionId, updated)
+        logAuthEvent(request, 'auth.refresh', 'succeeded')
         return { isValid: true, credentials: updated }
-      } catch (error) {
-        request.logger.info(
-          `Defra ID refresh failed, dropping session: ${error.message}`
-        )
-        await request.server.app.cache.drop(session.sessionId)
+      } catch {
+        logAuthEvent(request, 'auth.refresh', 'failed')
+        await cache.drop(session.sessionId)
         return { isValid: false }
       }
     }

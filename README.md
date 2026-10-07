@@ -13,6 +13,7 @@ Core delivery platform Node.js Frontend Template
 - [Local Development](#local-development)
   - [Setup](#setup)
   - [Development](#development)
+  - [Authentication](#authentication)
   - [Production](#production)
   - [Npm scripts](#npm-scripts)
   - [Update dependencies](#update-dependencies)
@@ -107,77 +108,218 @@ To run everything in docker, you can use:
 docker compose up -d
 ```
 
-To run the application in development mode without docker, you will need to have the following services running locally:
-
-The app authenticates with Defra ID and fetches its OIDC configuration at
-startup, so start the local [Defra ID stub](#defra-id-authentication) first:
-
-```bash
-docker compose up -d cdp-defra-id-stub
-```
-
-Then run the application in `development` mode:
+To run the application in `development` mode without docker:
 
 ```bash
 npm run dev
 ```
 
-### Defra ID (authentication)
+### Authentication
 
-This service signs users in with Defra ID (see [specs/defra-id.md](specs/defra-id.md)).
-Locally it uses the [cdp-defra-id-stub](https://github.com/DEFRA/cdp-defra-id-stub),
-which `docker compose up -d cdp-defra-id-stub` starts on port `3200` along with
-its dependencies (Redis and DynamoDB via floci). All `defraId` config defaults
-point at the stub — no environment setup needed.
+- [How sign-in works](#how-sign-in-works)
+- [Configuration](#configuration)
+- [App Registration](#app-registration)
+- [CDP dev verification](docs/entra-id-verification.md)
+- [Signing in locally and in CI](#signing-in-locally-and-in-ci)
+  - [Signing in locally](#signing-in-locally)
+  - [Signing in as someone else](#signing-in-as-someone-else)
+  - [In the end-to-end tests and CI](#in-the-end-to-end-tests-and-ci)
+  - [What the stub does not test](#what-the-stub-does-not-test)
+  - [Troubleshooting](#troubleshooting)
 
-Create a test user either through the stub's UI (you are redirected there on
-sign-in) or via its API:
+#### How sign-in works
+
+Users sign in with Defra's Entra ID via
+[@defra/hapi-auth-oidc](https://github.com/DEFRA/cdp-libraries/tree/main/packages/hapi-auth-oidc),
+following the CDP guide
+[Node.js integration](https://github.com/DEFRA/cdp-documentation/blob/main/how-to/federated-credentials/node-integration.md)
+except for one thing: the service authenticates to Entra with the App
+Registration's **client secret**, not a federated credential. Sessions are held
+server-side, refreshed shortly before the access token expires, and capped at
+`SESSION_COOKIE_TTL` from sign-in.
+
+Routes: `/auth/sign-in`, `/auth/callback` (GET, and POST for `form_post`) and
+`/auth/sign-out`. Sign-out drops the session, then sends the user to Entra's
+`end_session_endpoint` (with `id_token_hint`) so their Entra session ends too,
+and Entra returns them to `<APP_BASE_URL>/`. If Entra's discovery document
+cannot be read, the user is still signed out of the service.
+
+Entra app roles assigned to a user arrive in the ID token's `roles` claim and
+become their hapi `scope`. Every route requires a signed-in user with the
+`ENTRA_REQUIRED_ROLE` app role by default; a signed-in user without it sees
+"You do not have access to this service" (403). Users get the role through
+membership of the security group assigned to it on the App Registration's
+enterprise application. Public routes opt out with `auth: false`, or with
+`auth: { strategy: 'session', mode: 'try' }` to render signed in or out
+(naming the strategy stops hapi merging in the default's role check). A route
+can require a different role with `options: { auth: { access: { scope: ['<role>'] } } }`.
+
+The code is in [src/server/plugins/auth.js](src/server/plugins/auth.js),
+[src/server/auth/](src/server/auth) and
+[src/server/routes/auth/](src/server/routes/auth).
+
+#### Configuration
+
+| Variable              | Purpose                                                                                                                                                  |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ENTRA_CLIENT_ID`     | App Registration client (application) ID                                                                                                                 |
+| `ENTRA_CLIENT_SECRET` | App Registration client secret. A CDP secret, never in `cdp-app-config`. Required in production; the app will not start without it                       |
+| `ENTRA_DISCOVERY_URI` | `https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration`. Defaults to the [local Entra stub](#signing-in-locally-and-in-ci) |
+| `APP_BASE_URL`        | Public base URL; the callback is `<APP_BASE_URL>/auth/callback`                                                                                          |
+| `ENTRA_SCOPES`        | Defaults to `openid profile email offline_access user.read`. See [App Registration](#app-registration) before calling a backend                          |
+| `ENTRA_REQUIRED_ROLE` | App role needed on every route that does not opt out. Defaults to `Admin`; must match the role value on the App Registration                             |
+| `ENTRA_RESPONSE_MODE` | `form_post` in production (needs HTTPS), omitted locally                                                                                                 |
+
+In CDP, set `ENTRA_CLIENT_ID`, `ENTRA_DISCOVERY_URI` and `APP_BASE_URL` per
+environment in `cdp-app-config`, and `ENTRA_CLIENT_SECRET` and
+`SESSION_COOKIE_PASSWORD` as secrets in the CDP Portal. Use
+[the CDP dev verification checklist](docs/entra-id-verification.md) for
+deployment settings and live acceptance checks.
+
+#### App Registration
+
+Each Entra tenant (`defradev` for dev and test, `defra` for prod) needs an App
+Registration for this service, set up through ServiceNow. It needs:
+
+- **A client secret** ("Certificate Secret required: Yes"). It expires, usually
+  after 12 months: request a new one and update the CDP secret before then, or
+  nobody can sign in.
+- **Redirect URIs** (web platform): `<APP_BASE_URL>/auth/callback` and
+  `<APP_BASE_URL>/`. Entra only accepts a sign-out `post_logout_redirect_uri`
+  that is a registered redirect URI.
+- **An app role** whose value matches `ENTRA_REQUIRED_ROLE`, allowed for
+  groups, plus the `roles` claim in the token configuration.
+- **A security group** (`AG-...`) assigned to that role on the enterprise
+  application. Users are given access by adding them to the group.
+
+Before the app calls a backend with the user's access token, the App
+Registration also needs `requestedAccessTokenVersion: 2` and a custom scope
+exposed under "Expose an API" (for example `api://<client-id>/<scope>`), and
+`ENTRA_SCOPES` must request that scope in place of `user.read`. Otherwise the
+access token is a Microsoft Graph token, which a backend cannot verify.
+
+#### Signing in locally and in CI
+
+Locally and in CI, the app signs in against a **local Entra ID stub** instead
+of real Entra. The stub is
+[navikt/mock-oauth2-server](https://github.com/navikt/mock-oauth2-server), the
+`entra-stub` service in [compose.yml](compose.yml), on
+<http://localhost:3210>. It is never deployed. It accepts any client secret and
+issues tokens with whatever claims you give it, so it can issue exactly what
+Entra issues (`oid`, `name`, `preferred_username`, `roles`, and refresh tokens).
+
+Everything else is the code that runs on CDP: the same plugin, client
+authentication, routes, session, refresh and role handling. The differences:
+
+| On CDP                                              | Locally and in CI                                 |
+| --------------------------------------------------- | ------------------------------------------------- |
+| Entra ID (`login.microsoftonline.com`)              | The Entra stub (`localhost:3210`)                 |
+| The real client secret                              | `local-client-secret`, the non-production default |
+| `form_post`, `SameSite=None` sign-in cookies, HTTPS | `query`, `Lax`, plain HTTP                        |
+| Real users and app role assignments                 | Whoever you type into the stub's sign-in page     |
+
+To test against real Entra locally, set `ENTRA_DISCOVERY_URI`,
+`ENTRA_CLIENT_ID` and `ENTRA_CLIENT_SECRET` for the `defradev` tenant in your
+`.env` (git-ignored). `http://localhost:3000/auth/callback` must be a
+registered redirect URI.
+
+##### Signing in locally
+
+With Docker running:
 
 ```bash
-curl -H "Content-Type: application/json" -X POST \
-  -d '{
-    "userId": "86a7607c-a1e7-41e5-a0b6-a41680d05a2a",
-    "email": "jo.bloggs@example.com",
-    "firstName": "Jo",
-    "lastName": "Bloggs",
-    "loa": "1",
-    "aal": "1",
-    "enrolmentCount": 1,
-    "enrolmentRequestCount": 1,
-    "relationships": [
-      {
-        "organisationName": "Acme Waste Ltd",
-        "relationshipRole": "Employee",
-        "roleName": "user",
-        "roleStatus": "3"
-      }
-    ]
-  }' \
-  http://localhost:3200/cdp-defra-id-stub/API/register
+docker compose up -d entra-stub
+npm run dev
 ```
 
-To test token refresh without waiting for expiry, force it:
+Open <http://localhost:3000> and choose **Sign in**. You land on the stub's
+sign-in page, with a red "Not real Entra ID" banner. Pick a preset or edit
+the claims, then choose **Sign in** to come back to the app signed in.
 
-```bash
-curl -X POST http://localhost:3200/cdp-defra-id-stub/API/register/86a7607c-a1e7-41e5-a0b6-a41680d05a2a/expire
-```
+`npm run dev` needs nothing else: the defaults for `ENTRA_DISCOVERY_URI`,
+`ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` and `APP_BASE_URL` all point at the
+stub. Sessions are held in memory outside production, so Redis is not needed.
 
-After auth changes, run the end-to-end journeys — they cover sign-in, redirect
-preservation, route protection, sign-out, the failure pages, token refresh,
-session storage, organisation switching and the absolute session cap, against
-the real stub:
+The stub keeps running until you stop it with `docker compose stop entra-stub`.
 
-```bash
-docker compose up -d cdp-defra-id-stub
-npm run test:e2e
-```
+The `frontend` service in `compose.yml` runs the production image to check it
+starts; use `npm run dev` to sign in.
 
-See [e2e/README.md](e2e/README.md) for what each journey covers and how the
-suite is put together.
+##### Signing in as someone else
 
-In deployed environments the identity provider is set per environment:
-the CDP-hosted stub in `dev`, real Defra ID in `test`, `perf-test` and `prod` —
-via the `DEFRA_ID_*` environment variables and CDP service secrets.
+The stub's sign-in page ([compose/entra-stub/login.html](compose/entra-stub/login.html))
+has two fields:
+
+- **Username** becomes the token's `sub`.
+- **ID token claims (JSON)** are added to the ID and access tokens.
+
+The session reads these claims, so keep them in Entra's shape:
+
+| Claim                | Used for                                         |
+| -------------------- | ------------------------------------------------ |
+| `oid`                | The user's ID in the session                     |
+| `name`               | The name in the header                           |
+| `preferred_username` | The email address in the header                  |
+| `roles`              | Entra app roles, which become the user's `scope` |
+
+The **Admin** preset has `roles: ["Admin"]`, and the **no roles** preset has
+none, for checking what a user without access sees. To add a preset, add it to
+the `presets` object in `login.html`; the stub reads the file on each request,
+so there is no need to restart it.
+
+The stub's own settings are in
+[compose/entra-stub/config.json](compose/entra-stub/config.json). Its tokens
+last an hour, the stub default.
+
+##### In the end-to-end tests and CI
+
+The sign-in journeys in
+[e2e/journeys/auth/sign-in.spec.js](e2e/journeys/auth/sign-in.spec.js) sign in
+through the stub's page, as the users in
+[e2e/support/entra-stub.js](e2e/support/entra-stub.js). They cover signing in
+and out, returning to the page the user was heading for, and a user with and
+without the Admin role.
+
+- **Locally**, `npm run test:e2e` starts the stub with
+  `docker compose up entra-stub` if it is not already running, so Docker must
+  be running. The first run pulls the image. The stub is left running
+  afterwards.
+- **In CI**, the `e2e` job in
+  [check-pull-request.yml](.github/workflows/check-pull-request.yml) starts it
+  with the other compose services, and Playwright reuses it.
+
+See [e2e/README.md](e2e/README.md) for the rest of the suite.
+
+##### What the stub does not test
+
+These only get tested on CDP (or locally against the `defradev` tenant), so
+check them in dev and test after any auth change:
+
+- Real Entra behaviour: the client secret, registered redirect URIs, consent,
+  and which claims Entra really sends.
+- `form_post` and `SameSite=None` cookies. Locally the app uses `query` over
+  HTTP, as the docs recommend.
+- The CDP proxy route to `login.microsoftonline.com`.
+
+The stub does not check the client ID, client secret or redirect URI. So a
+wrong `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` or `APP_BASE_URL` will work
+locally and fail on CDP.
+
+##### Troubleshooting
+
+| Symptom                                                                         | Cause                                                                                |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| "Something went wrong" on **Sign in**, and `TypeError: fetch failed` in the log | The stub is not running: `docker compose up -d entra-stub`                           |
+| The app will not start: `ENTRA_CLIENT_SECRET must be set`                       | Running with `NODE_ENV=production` and no secret. Set it as a CDP secret, or locally |
+| "We could not sign you in" on CDP, with `AADSTS7000215` in the log              | The client secret is wrong                                                           |
+| "We could not sign you in" on CDP, with `AADSTS7000222` in the log              | The client secret has expired: request a new one and update the CDP secret           |
+| The stub sends you back to the wrong port                                       | `APP_BASE_URL` does not match where the app is running                               |
+| Signed in, but no name in the header, or a 403 you did not expect               | The claims are missing `name`, or `roles` does not include the role the route needs  |
+
+To see what the stub received, run `docker compose logs entra-stub`.
+
+The stub image is pinned in `compose.yml`. When updating it, run
+`npm run test:e2e` to check sign-in still works.
 
 ### Production
 
@@ -258,7 +400,9 @@ A local environment with:
 - Floci (replacing Localstack) for AWS services (S3, SQS)
 - Redis
 - MongoDB
-- This service.
+- A local Entra ID stub, for signing in when running with `npm run dev` (see
+  [Signing in locally and in CI](#signing-in-locally-and-in-ci))
+- This service, in production mode. It cannot sign in locally.
 - A commented out backend example.
 
 ```bash

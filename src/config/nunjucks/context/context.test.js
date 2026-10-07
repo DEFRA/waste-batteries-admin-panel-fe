@@ -84,7 +84,6 @@ describe('context and cache', () => {
             isAuthenticated: true,
             credentials: {
               displayName: 'Jo Bloggs',
-              organisationName: 'Acme Ltd',
               email: 'jo.bloggs@example.com'
             }
           }
@@ -93,7 +92,6 @@ describe('context and cache', () => {
         expect(authenticatedContext.auth).toEqual({
           isAuthenticated: true,
           displayName: 'Jo Bloggs',
-          organisationName: 'Acme Ltd',
           email: 'jo.bloggs@example.com'
         })
       })
