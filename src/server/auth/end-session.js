@@ -48,5 +48,5 @@ export async function buildEndSessionUrl(idToken) {
 
 // Tests only
 export function resetEndSessionEndpoint() {
-  endSessionEndpoint = undefined
+  endSessionEndpoint = null
 }

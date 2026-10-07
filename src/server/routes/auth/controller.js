@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import escape from 'lodash/escape.js'
+import escapeHtml from 'lodash/escape.js'
 import Boom from '@hapi/boom'
 
 import { buildEndSessionUrl, postSignOutPath } from '../../auth/end-session.js'
@@ -7,15 +7,18 @@ import { getSafeRedirect } from '../../auth/get-safe-redirect.js'
 import { toSession } from '../../auth/session.js'
 import { logAuthEvent } from '../../auth/log-auth-event.js'
 
+const LOGIN_EVENT = 'auth.login'
+const LOGOUT_EVENT = 'auth.logout'
+
 export async function signInController(request, h) {
   // yar-backed so it survives the round trip to Entra
   request.yar.flash('redirect', getSafeRedirect(request.query.redirect))
   try {
     const response = await request.login(h)
-    logAuthEvent(request, 'auth.login', 'started')
+    logAuthEvent(request, LOGIN_EVENT, 'started')
     return response
   } catch {
-    logAuthEvent(request, 'auth.login', 'failed')
+    logAuthEvent(request, LOGIN_EVENT, 'failed')
     throw Boom.unauthorized()
   }
 }
@@ -27,7 +30,7 @@ export async function callbackController(request, h) {
   try {
     credentials = await request.callback(h)
   } catch {
-    logAuthEvent(request, 'auth.login', 'failed')
+    logAuthEvent(request, LOGIN_EVENT, 'failed')
     throw Boom.unauthorized()
   }
   const sessionId = randomUUID() // fresh id on every sign-in — prevents fixation
@@ -39,12 +42,12 @@ export async function callbackController(request, h) {
 
   await request.server.app.cache.set(sessionId, session)
   request.cookieAuth.set({ sessionId })
-  logAuthEvent(request, 'auth.login', 'succeeded')
+  logAuthEvent(request, LOGIN_EVENT, 'succeeded')
 
   // A meta refresh rather than a 302: with form_post the browser arrives here
   // on a cross-site POST, and the next request must be same-site for the Lax
   // session cookie to go with it
-  const redirect = escape(
+  const redirect = escapeHtml(
     getSafeRedirect(request.yar.flash('redirect')?.at(0) ?? '/')
   )
   return h
@@ -58,7 +61,7 @@ export async function signOutController(request, h) {
   request.cookieAuth.clear()
 
   if (!request.auth.isAuthenticated) {
-    logAuthEvent(request, 'auth.logout', 'succeeded')
+    logAuthEvent(request, LOGOUT_EVENT, 'succeeded')
     return h.redirect(postSignOutPath)
   }
 
@@ -69,10 +72,10 @@ export async function signOutController(request, h) {
   // stops the next sign-in going straight through without a prompt
   try {
     const response = h.redirect(await buildEndSessionUrl(idToken))
-    logAuthEvent(request, 'auth.logout', 'succeeded')
+    logAuthEvent(request, LOGOUT_EVENT, 'succeeded')
     return response
   } catch {
-    logAuthEvent(request, 'auth.logout', 'local_only')
+    logAuthEvent(request, LOGOUT_EVENT, 'local_only')
     return h.redirect(postSignOutPath)
   }
 }
