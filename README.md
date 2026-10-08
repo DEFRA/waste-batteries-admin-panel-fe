@@ -25,6 +25,7 @@ Core delivery platform Node.js Frontend Template
   - [Docker Compose](#docker-compose)
   - [Dependabot](#dependabot)
   - [SonarCloud](#sonarcloud)
+  - [Security scanning (ZAP)](#security-scanning-zap)
 - [Licence](#licence)
   - [About the licence](#about-the-licence)
 
@@ -32,13 +33,27 @@ Core delivery platform Node.js Frontend Template
 
 ### Node.js
 
-Please install Node Version Manager [nvm](https://github.com/creationix/nvm)
+This service uses Node.js 26.10.0. The version is pinned in [`.nvmrc`](./.nvmrc), and `package.json` requires Node.js 26 or newer. GitHub Actions reads `.nvmrc`, so pull request and publish workflows use the same version. The Docker image uses the DEFRA parent image `defradigital/node:3.2.3-node26.10.0`.
 
-To use the correct version of Node.js for this application, via nvm:
+Install Node.js with a version manager, then install the version in `.nvmrc`.
+
+**Windows** ([nvm for Windows](https://github.com/coreybutler/nvm-windows)):
+
+```powershell
+nvm install 26.10.0
+nvm use 26.10.0
+node -v
+```
+
+`node -v` should print `v26.10.0`. In this repository the nvm shim also follows `.nvmrc`, so commands run from the repo use 26.10.0 once that version is installed.
+
+**macOS and Linux** ([nvm](https://github.com/nvm-sh/nvm)):
 
 ```bash
 cd waste-batteries-admin-panel-fe
+nvm install
 nvm use
+node -v
 ```
 
 ## Server-side Caching
@@ -442,6 +457,30 @@ To match the SonarCloud pull request summary view, pass the pull request key:
 ```bash
 SONAR_TOKEN=your-token SONAR_PULL_REQUEST=6 ./sonarCloudLocal.sh
 ```
+
+### Security scanning (ZAP)
+
+Every pull request runs a **passive** [OWASP ZAP](https://www.zaproxy.org/)
+scan as part of the `e2e` job. Playwright Chromium is proxied through a ZAP
+daemon started from
+[compose-github.override-zap.yml](./compose-github.override-zap.yml), so the
+journeys generate the traffic ZAP inspects. There is no separate scan job.
+
+The pull request fails if ZAP reports any **High** alerts against this app
+(the compose frontend on port 3000 and the Playwright instance on 3100). The
+`@zap` spec waits until ZAP's passive scan queue is empty before it reads
+those alerts. Medium and Low findings stay in the report; they do not fail
+the check. Traffic to the Entra ID stub on port 3210 is proxied too, but stub
+findings are excluded from the High gate.
+
+The HTML and JSON reports are uploaded as the `zap-test-report` artefact and
+linked from a comment on the pull request, alongside the Playwright report.
+
+ZAP is CI/test-only — it does not change app runtime config. The
+[Proxy](#proxy) section above is the **app outbound** `HTTP_PROXY` / undici
+dispatcher, which is unrelated.
+
+To run the same scan locally, see [e2e/README.md](e2e/README.md#owasp-zap).
 
 ## Licence
 
