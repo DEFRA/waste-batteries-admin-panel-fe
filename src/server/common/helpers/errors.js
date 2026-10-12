@@ -29,6 +29,17 @@ export function catchAll(request, h) {
     request.logger.error(response?.stack)
   }
 
+  // Only sign-in raises a 401; signed-out visitors to protected pages are
+  // redirected to sign-in instead
+  if (statusCode === statusCodes.unauthorized) {
+    return h
+      .view('unauthorised/index', {
+        pageTitle: 'We could not sign you in',
+        heading: 'We could not sign you in'
+      })
+      .code(statusCode)
+  }
+
   // Authenticated but missing the required scope
   if (statusCode === statusCodes.forbidden) {
     return h

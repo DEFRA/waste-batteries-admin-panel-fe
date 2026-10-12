@@ -21,13 +21,11 @@ function buildAuthContext(request) {
     return { isAuthenticated: false }
   }
 
-  const { displayName, organisationName, email } =
-    request.auth.credentials ?? {}
+  const { displayName, email } = request.auth.credentials ?? {}
 
   return {
     isAuthenticated: true,
     displayName,
-    organisationName,
     email
   }
 }

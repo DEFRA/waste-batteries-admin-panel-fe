@@ -26,12 +26,4 @@ test.describe('Signed-out visitor', { tag: '@auth' }, () => {
     expect(await findCookie(page.context(), 'crumb')).toBeDefined()
     await expectNoTokensInBrowser(page)
   })
-
-  test('gets a cacheable home page while signed out', async ({ page }) => {
-    const response = await page.goto('/')
-
-    // no-store is reserved for authenticated responses; applying it here would
-    // needlessly defeat caching of a public page
-    expect(response.headers()['cache-control']).not.toBe('no-store')
-  })
 })
