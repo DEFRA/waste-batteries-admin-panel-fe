@@ -70,6 +70,7 @@
     "pino": "10.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@babel/preset-env": "7.29.2",
     "@defra/hapi-connect": "1.0.1",
     "@playwright/test": "1.62.1",
