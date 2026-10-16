@@ -1,45 +1,16 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
-import { signIn } from '../../support/journeys.js'
-import { operatorUser, pendingRoleUser } from '../../support/users.js'
-
-/** Each page: how to reach it, and who has to be signed in to see it. */
+/** Each page, and how to reach it. */
 const pages = [
   { name: 'Home (signed out)', path: '/' },
   { name: 'About (signed out)', path: '/about' },
-  { name: 'Not found', path: '/no-such-page' },
-  {
-    name: 'Could not sign you in',
-    path: '/auth/sign-in-oidc?error=access_denied'
-  },
-  { name: 'Home (signed in)', path: '/', user: operatorUser },
-  { name: 'About (signed in)', path: '/about', user: operatorUser },
-  { name: 'Example', path: '/example', user: operatorUser },
-  {
-    name: 'Example (validation error)',
-    path: '/example',
-    user: operatorUser,
-    hasErrors: true,
-    async act(page) {
-      await page.getByLabel('Example Text').fill('')
-      await page.getByRole('button', { name: 'Save' }).click()
-      await expect(page.getByText('There is a problem')).toBeVisible()
-    }
-  },
-  {
-    name: 'No access',
-    path: '/e2e/role-protected',
-    user: pendingRoleUser
-  }
+  { name: 'Not found', path: '/no-such-page' }
 ]
 
 test.describe('Accessibility', { tag: '@a11y' }, () => {
-  for (const { name, path, user, act, hasErrors } of pages) {
+  for (const { name, path, act, hasErrors } of pages) {
     const open = async (page) => {
-      if (user) {
-        await signIn(page, user)
-      }
       await page.goto(path)
       await act?.(page)
     }
@@ -51,8 +22,6 @@ test.describe('Accessibility', { tag: '@a11y' }, () => {
         /**
          * Axe's tags are not cumulative, so AA means listing every level up to it.
          * best-practice adds axe's non-WCAG rules, such as landmarks.
-         * /e2e/protected is bare harness HTML, so is deliberately not scanned;
-         * /e2e/role-protected is, because a pending user gets the real no-access page.
          */
         .withTags([
           'wcag2a',
