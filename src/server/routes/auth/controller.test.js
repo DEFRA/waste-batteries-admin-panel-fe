@@ -1,7 +1,8 @@
 import { createServer } from '../../server.js'
 import { testOidcConfig } from '#/test-helpers/oidc-stub.js'
 
-describe('auth routes', () => {
+// Auth routes are unregistered while Defra ID is disabled (see plugins/auth.js)
+describe.skip('auth routes', () => {
   let server
 
   beforeAll(async () => {
