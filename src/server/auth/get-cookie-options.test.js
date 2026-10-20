@@ -1,15 +1,12 @@
 import { vi } from 'vitest'
 
 import { getCookieOptions } from './get-cookie-options.js'
-import { refreshTokens } from './refresh-tokens.js'
-import { verifyToken } from './verify-token.js'
 
-vi.mock('./refresh-tokens.js', () => ({ refreshTokens: vi.fn() }))
-vi.mock('./verify-token.js', () => ({ verifyToken: vi.fn() }))
-
-function buildRequest(cached) {
+function buildRequest(cached, ensureValidToken = vi.fn()) {
   return {
     server: {
+      logger: { info: vi.fn() },
+      plugins: { 'hapi-auth-oidc': { oidc: { ensureValidToken } } },
       app: {
         cache: {
           get: vi.fn().mockResolvedValue(cached),
@@ -18,7 +15,21 @@ function buildRequest(cached) {
         }
       }
     },
+    info: { id: 'request-1' },
     logger: { info: vi.fn() }
+  }
+}
+
+const oidcOf = (request) => request.server.plugins['hapi-auth-oidc'].oidc
+
+function freshSession(overrides = {}) {
+  return {
+    sessionId: 'sid',
+    accessToken: 'old-access',
+    refreshToken: 'old-refresh',
+    displayName: 'Jo Bloggs',
+    createdAt: new Date().toISOString(),
+    ...overrides
   }
 }
 
@@ -47,45 +58,47 @@ describe('#getCookieOptions', () => {
       })
     })
 
-    test('Should be valid without refresh when not near expiry', async () => {
-      const cached = {
-        sessionId: 'sid',
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString()
-      }
-      const request = buildRequest(cached)
+    test('Should be valid without saving when the token needs no refresh', async () => {
+      const cached = freshSession()
+      const request = buildRequest(
+        cached,
+        vi.fn().mockResolvedValue({ token: cached, refreshed: false })
+      )
 
       expect(await options.validate(request, { sessionId: 'sid' })).toEqual({
         isValid: true,
         credentials: cached
       })
-      expect(refreshTokens).not.toHaveBeenCalled()
+      // Empty logger: the library would log the user's name on refresh
+      expect(oidcOf(request).ensureValidToken).toHaveBeenCalledWith(
+        { logger: {} },
+        cached
+      )
+      expect(request.server.app.cache.set).not.toHaveBeenCalled()
     })
 
-    test('Should refresh and update the cached session when near expiry', async () => {
-      const cached = {
-        sessionId: 'sid',
-        refreshToken: 'old-refresh',
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 30 * 1000).toISOString()
-      }
-      const request = buildRequest(cached)
-      refreshTokens.mockResolvedValue({
-        access_token: 'new-access',
-        id_token: 'new-id-token',
-        expires_in: 3600
-        // no refresh_token — B2C may not rotate it
-      })
-      verifyToken.mockResolvedValue({ sub: 'user-123' })
+    test('Should save the refreshed tokens and profile', async () => {
+      const request = buildRequest(
+        freshSession(),
+        vi.fn().mockResolvedValue({
+          refreshed: true,
+          token: {
+            accessToken: 'new-access',
+            // no refreshToken — Entra may not rotate it
+            claims: { oid: 'oid-1', name: 'Jo Smith', roles: ['admin'] }
+          }
+        })
+      )
 
       const result = await options.validate(request, { sessionId: 'sid' })
 
-      expect(refreshTokens).toHaveBeenCalledWith('old-refresh')
       expect(result.isValid).toBe(true)
       expect(result.credentials).toMatchObject({
+        sessionId: 'sid',
         accessToken: 'new-access',
-        refreshToken: 'old-refresh', // kept, since none was returned
-        idToken: 'new-id-token'
+        refreshToken: 'old-refresh',
+        displayName: 'Jo Smith',
+        scope: ['admin']
       })
       expect(request.server.app.cache.set).toHaveBeenCalledWith(
         'sid',
@@ -93,43 +106,52 @@ describe('#getCookieOptions', () => {
       )
     })
 
-    test('Should drop the session once past the absolute session ttl', async () => {
-      const cached = {
-        sessionId: 'sid',
-        createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString()
-      }
-      const request = buildRequest(cached)
+    test('Should keep the cached profile when the refresh returns no claims', async () => {
+      const request = buildRequest(
+        freshSession(),
+        vi.fn().mockResolvedValue({
+          refreshed: true,
+          token: { accessToken: 'new-access', refreshToken: 'new-refresh' }
+        })
+      )
 
-      expect(await options.validate(request, { sessionId: 'sid' })).toEqual({
-        isValid: false
+      const result = await options.validate(request, { sessionId: 'sid' })
+
+      expect(result.credentials).toMatchObject({
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+        displayName: 'Jo Bloggs'
       })
-      expect(request.server.app.cache.drop).toHaveBeenCalledWith('sid')
-      expect(refreshTokens).not.toHaveBeenCalled()
-    })
-
-    test('Should treat a session without createdAt as expired', async () => {
-      const cached = {
-        sessionId: 'sid',
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString()
-      }
-      const request = buildRequest(cached)
-
-      expect(await options.validate(request, { sessionId: 'sid' })).toEqual({
-        isValid: false
-      })
-      expect(request.server.app.cache.drop).toHaveBeenCalledWith('sid')
     })
 
     test('Should drop the session when refresh fails', async () => {
-      const cached = {
-        sessionId: 'sid',
-        refreshToken: 'expired-refresh',
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() - 1000).toISOString()
-      }
-      const request = buildRequest(cached)
-      refreshTokens.mockRejectedValue(new Error('invalid_grant'))
+      const request = buildRequest(
+        freshSession(),
+        vi.fn().mockRejectedValue(new Error('invalid_grant'))
+      )
+
+      expect(await options.validate(request, { sessionId: 'sid' })).toEqual({
+        isValid: false
+      })
+      expect(request.server.app.cache.drop).toHaveBeenCalledWith('sid')
+    })
+
+    test('Should drop the session once past the session cookie ttl', async () => {
+      const request = buildRequest(
+        freshSession({
+          createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString()
+        })
+      )
+
+      expect(await options.validate(request, { sessionId: 'sid' })).toEqual({
+        isValid: false
+      })
+      expect(request.server.app.cache.drop).toHaveBeenCalledWith('sid')
+      expect(oidcOf(request).ensureValidToken).not.toHaveBeenCalled()
+    })
+
+    test('Should treat a session without createdAt as expired', async () => {
+      const request = buildRequest(freshSession({ createdAt: undefined }))
 
       expect(await options.validate(request, { sessionId: 'sid' })).toEqual({
         isValid: false

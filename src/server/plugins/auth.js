@@ -1,19 +1,34 @@
+import { hapiAuthOidcPlugin } from '@defra/hapi-auth-oidc'
 import cookie from '@hapi/cookie'
 
+import { config } from '#/config/config.js'
 import { getCookieOptions } from '../auth/get-cookie-options.js'
+import { getOidcOptions } from '../auth/oidc-options.js'
 
 /**
- * Defra ID sign-in is disabled until Entra ID replaces it (EB-181). Only the
- * cookie session strategy is registered, so no IdP is contacted at startup.
- * Public routes still render; routes that need a session redirect to sign-in.
+ * Registers Entra ID sign-in and the session auth strategy:
+ * - hapi-auth-oidc: decorates the request with login, callback and
+ *   ensureValidToken, authenticating to Entra with the client secret
+ * - session (cookie): cookie-backed session validation with token refresh
+ *
+ * Every route registered after this plugin requires a signed-in user with the
+ * required Entra app role by default. Public routes must opt out explicitly
+ * with auth: false, or auth: { strategy: 'session', mode: 'try' } — naming the
+ * strategy stops hapi merging in the default's role check.
  */
 export const auth = {
   plugin: {
     name: 'auth',
     register: async function (server) {
-      await server.register(cookie)
+      await server.register([
+        cookie,
+        { plugin: hapiAuthOidcPlugin, options: getOidcOptions() }
+      ])
       server.auth.strategy('session', 'cookie', getCookieOptions())
-      server.auth.default('session')
+      server.auth.default({
+        strategy: 'session',
+        access: { scope: [config.get('auth.requiredRole')] }
+      })
     }
   }
 }

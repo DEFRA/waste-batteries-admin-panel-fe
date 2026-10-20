@@ -1,80 +1,81 @@
 import { randomUUID } from 'node:crypto'
+import escapeHtml from 'lodash/escape.js'
+import Boom from '@hapi/boom'
 
-import { config } from '#/config/config.js'
-import { getOidcConfig } from '../../auth/get-oidc-config.js'
-import { statusCodes } from '../../common/constants/status-codes.js'
+import { buildEndSessionUrl, postSignOutPath } from '../../auth/end-session.js'
+import { getSafeRedirect } from '../../auth/get-safe-redirect.js'
+import { toSession } from '../../auth/session.js'
+import { logAuthEvent } from '../../auth/log-auth-event.js'
 
-export function signInController(_request, h) {
-  return h.redirect('/')
+const LOGIN_EVENT = 'auth.login'
+const LOGOUT_EVENT = 'auth.logout'
+
+export async function signInController(request, h) {
+  // yar-backed so it survives the round trip to Entra
+  request.yar.flash('redirect', getSafeRedirect(request.query.redirect))
+  try {
+    const response = await request.login(h)
+    logAuthEvent(request, LOGIN_EVENT, 'started')
+    return response
+  } catch {
+    logAuthEvent(request, LOGIN_EVENT, 'failed')
+    throw Boom.unauthorized()
+  }
 }
 
-export async function signInOidcController(request, h) {
-  if (!request.auth.isAuthenticated) {
-    // Log the OIDC detail, render none of it
-    request.logger.warn(
-      `Defra ID sign-in failed: ${request.auth.error?.message}`
-    )
-    return h
-      .view('unauthorised/index', {
-        pageTitle: 'We could not sign you in',
-        heading: 'We could not sign you in'
-      })
-      .code(statusCodes.unauthorized)
+export async function callbackController(request, h) {
+  // Throws a 401 (rendered as "We could not sign you in") on any failure,
+  // including the user cancelling at Entra
+  let credentials
+  try {
+    credentials = await request.callback(h)
+  } catch {
+    logAuthEvent(request, LOGIN_EVENT, 'failed')
+    throw Boom.unauthorized()
+  }
+  const sessionId = randomUUID() // fresh id on every sign-in — prevents fixation
+  const session = {
+    ...toSession(credentials),
+    sessionId,
+    createdAt: new Date().toISOString()
   }
 
-  const { profile, token, refreshToken, expiresIn } = request.auth.credentials
-  const sessionId = randomUUID() // fresh id on every sign-in — prevents fixation
-
-  await request.server.app.cache.set(sessionId, {
-    ...profile,
-    sessionId,
-    accessToken: token,
-    refreshToken,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + Number(expiresIn) * 1000).toISOString()
-  })
-
+  await request.server.app.cache.set(sessionId, session)
   request.cookieAuth.set({ sessionId })
-  request.logger.info(
-    `User authenticated (correlationId ${profile.correlationId})`
-  )
+  logAuthEvent(request, LOGIN_EVENT, 'succeeded')
 
-  return h.redirect(request.yar.flash('redirect')?.at(0) ?? '/')
+  // A meta refresh rather than a 302: with form_post the browser arrives here
+  // on a cross-site POST, and the next request must be same-site for the Lax
+  // session cookie to go with it
+  const redirect = escapeHtml(
+    getSafeRedirect(request.yar.flash('redirect')?.at(0) ?? '/')
+  )
+  return h
+    .response(
+      `<!doctype html><html lang="en"><head><meta http-equiv="refresh" content="0;url=${redirect}"></head><body></body></html>`
+    )
+    .type('text/html')
 }
 
 export async function signOutController(request, h) {
+  request.cookieAuth.clear()
+
   if (!request.auth.isAuthenticated) {
-    return h.redirect('/')
+    logAuthEvent(request, LOGOUT_EVENT, 'succeeded')
+    return h.redirect(postSignOutPath)
   }
 
-  const session = request.auth.credentials
-  const oidcConfig = await getOidcConfig()
+  const { sessionId, idToken } = request.auth.credentials
+  await request.server.app.cache.drop(sessionId)
 
-  // State so a third party can't forge the post-logout callback
-  const state = randomUUID()
-  request.yar.flash('signOutState', state)
-
-  // Drop the local session now — the callback may never arrive
-  await request.server.app.cache.drop(session.sessionId)
-  request.cookieAuth.clear()
-
-  const url = new URL(oidcConfig.end_session_endpoint)
-  url.search = new URLSearchParams({
-    id_token_hint: session.idToken,
-    post_logout_redirect_uri: `${config.get('defraId.callbackBaseUrl')}/auth/sign-out-oidc`,
-    state
-  }).toString()
-
-  return h.redirect(url.toString())
-}
-
-export function signOutOidcController(request, h) {
-  const expected = request.yar.flash('signOutState')?.at(0)
-  if (!expected || request.query.state !== expected) {
-    request.logger.warn('Post-logout callback with unrecognised state')
+  // Signed out of the service either way; ending the Entra session as well
+  // stops the next sign-in going straight through without a prompt
+  try {
+    const response = h.redirect(await buildEndSessionUrl(idToken))
+    logAuthEvent(request, LOGOUT_EVENT, 'succeeded')
+    return response
+  } catch {
+    logAuthEvent(request, LOGOUT_EVENT, 'local_only')
+    return h.redirect(postSignOutPath)
   }
-
-  // Fail-safe: the session is already gone; clear the cookie again
-  request.cookieAuth.clear()
-  return h.redirect('/')
 }

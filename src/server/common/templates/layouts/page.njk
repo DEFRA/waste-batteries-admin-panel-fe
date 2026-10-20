@@ -45,7 +45,6 @@
 {% block headerEnd %}
   {% if auth.isAuthenticated %}
     {{ appAccountBar({
-      organisationName: auth.organisationName,
       email: auth.email,
       name: auth.displayName
     }) }}

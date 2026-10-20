@@ -111,12 +111,6 @@ export const config = convict({
     default: null,
     env: 'HTTP_PROXY'
   },
-  wasteBatteriesRegBackendUrl: {
-    doc: 'Waste batteries registration backend URL',
-    format: 'url',
-    default: 'http://localhost:3001',
-    env: 'WASTE_BATTERIES_REG_BACKEND_URL'
-  },
   isSecureContextEnabled: {
     doc: 'Enable Secure Context',
     format: Boolean,
@@ -146,7 +140,7 @@ export const config = convict({
     },
     cookie: {
       ttl: {
-        doc: 'Session cookie ttl',
+        doc: 'Session cookie ttl, also the hard limit on a signed-in session from sign-in',
         format: Number,
         default: fourHoursMs,
         env: 'SESSION_COOKIE_TTL'
@@ -164,62 +158,55 @@ export const config = convict({
         default: isProduction,
         env: 'SESSION_COOKIE_SECURE'
       }
-    },
-    absoluteTtl: {
-      doc: 'Hard ceiling on a signed-in session, measured from sign-in; token refresh cannot extend a session past it',
-      format: Number,
-      default: fourHoursMs,
-      env: 'SESSION_ABSOLUTE_TTL'
     }
   },
-  defraId: {
-    discoveryUrl: {
-      doc: 'Defra ID OIDC .well-known/openid-configuration URL',
+  auth: {
+    requiredRole: {
+      doc: 'Entra app role a signed-in user needs to use any route that does not opt out. Must match the role value on the App Registration',
       format: String,
-      default:
-        'http://localhost:3200/cdp-defra-id-stub/.well-known/openid-configuration',
-      env: 'DEFRA_ID_DISCOVERY_URL'
+      default: 'Admin',
+      env: 'ENTRA_REQUIRED_ROLE'
     },
-    clientId: {
-      // The stub's built-in oidc.clientId — it hardcodes this as the `aud` of
-      // every token it issues regardless of the client_id sent, so token
-      // verification only passes when our clientId matches it
-      doc: 'Defra ID client id',
-      format: String,
-      default: '63983fc2-cfff-45bb-8ec2-959e21062b9a',
-      env: 'DEFRA_ID_CLIENT_ID'
+    oidc: {
+      clientId: {
+        doc: 'Entra ID App Registration client (application) id',
+        format: String,
+        default: 'local-client-id',
+        env: 'ENTRA_CLIENT_ID'
+      },
+      discoveryUri: {
+        doc: 'Entra ID .well-known/openid-configuration URL, e.g. https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration. The default is the local Entra stub in compose.yml',
+        format: 'url',
+        default: 'http://localhost:3210/entra/.well-known/openid-configuration',
+        env: 'ENTRA_DISCOVERY_URI'
+      },
+      externalBaseUrl: {
+        doc: 'Public base URL of this service, used to build the callback URL, no trailing slash',
+        format: 'url',
+        default: 'http://localhost:3000',
+        env: 'APP_BASE_URL'
+      },
+      scope: {
+        doc: 'Space-separated scopes requested at sign-in',
+        format: String,
+        default: 'openid profile email offline_access user.read',
+        env: 'ENTRA_SCOPES'
+      },
+      responseMode: {
+        doc: 'How Entra returns the sign-in response: form_post (recommended, needs HTTPS) or query. Null omits the parameter, which defaults to query',
+        format: ['form_post', 'query'],
+        nullable: true,
+        default: isProduction ? 'form_post' : null,
+        env: 'ENTRA_RESPONSE_MODE'
+      }
     },
     clientSecret: {
-      doc: 'Defra ID client secret',
-      format: String,
-      default: 'test_value',
-      sensitive: true,
-      env: 'DEFRA_ID_CLIENT_SECRET'
-    },
-    serviceId: {
-      doc: 'Defra ID service id (non-standard OIDC param, required)',
-      format: String,
-      default: 'stub-service-id',
-      env: 'DEFRA_ID_SERVICE_ID'
-    },
-    scopes: {
-      doc: 'OAuth scopes requested at sign-in. Real Defra ID (B2C) additionally requires the client_id as a scope to issue an access token — set DEFRA_ID_SCOPES=openid,offline_access,<client_id> in real environments. The CDP stub rejects the client_id scope, hence this stub-compatible default.',
-      format: Array,
-      default: ['openid', 'offline_access'],
-      env: 'DEFRA_ID_SCOPES'
-    },
-    policy: {
-      doc: 'B2C policy, sent as the `p` provider param when set',
+      doc: 'Entra ID App Registration client secret. Set as a CDP secret; required in production. The local default is only accepted by the Entra stub in compose.yml',
       format: String,
       nullable: true,
-      default: null,
-      env: 'DEFRA_ID_POLICY'
-    },
-    callbackBaseUrl: {
-      doc: 'Public base URL used to build both auth callback URLs, no trailing slash',
-      format: String,
-      default: 'http://localhost:3000',
-      env: 'DEFRA_ID_CALLBACK_BASE_URL'
+      default: isProduction ? null : 'local-client-secret',
+      sensitive: true,
+      env: 'ENTRA_CLIENT_SECRET'
     }
   },
   redis: {

@@ -1,6 +1,7 @@
 import yar from '@hapi/yar'
 
 import { config } from '#/config/config.js'
+import { getCallbackSameSite } from '../auth/oidc-options.js'
 
 const sessionConfig = config.get('session')
 
@@ -21,9 +22,9 @@ export const sessionCache = {
       password: sessionConfig.cookie.password,
       ttl: sessionConfig.cookie.ttl,
       isSecure: config.get('session.cookie.secure'),
-      // Lax, not the hapi default Strict — yar carries the post-sign-in redirect
-      // path and sign-out state, which must survive the redirect back from Defra ID
-      isSameSite: 'Lax',
+      // Not the hapi default Strict — yar carries the post-sign-in redirect
+      // path, which must survive the redirect back from Entra
+      isSameSite: getCallbackSameSite(),
       clearInvalid: true
     }
   }

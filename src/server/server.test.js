@@ -27,8 +27,8 @@ describe('#createServer', () => {
     await server.stop({ timeout: 0 })
   })
 
-  describe('Defra ID auth session cache', () => {
-    test('Should store and retrieve a session via the defra-id-session segment', async () => {
+  describe('Auth session cache', () => {
+    test('Should store and retrieve a session via the auth-session segment', async () => {
       await server.app.cache.set('test-session-id', { userId: 'user-123' })
 
       expect(await server.app.cache.get('test-session-id')).toEqual({
@@ -54,7 +54,21 @@ describe('#createServer', () => {
       )
     })
 
-    test('Should serve a protected route to an authenticated user', async () => {
+    test('Should serve a protected route to a user with the required role', async () => {
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: '/test/protected',
+        auth: {
+          strategy: 'session',
+          credentials: { sessionId: 'sid', scope: ['Admin'] }
+        }
+      })
+
+      expect(statusCode).toBe(200)
+      expect(result).toBe('protected content')
+    })
+
+    test('Should refuse a protected route to a user without the required role', async () => {
       const { statusCode, result } = await server.inject({
         method: 'GET',
         url: '/test/protected',
@@ -64,8 +78,8 @@ describe('#createServer', () => {
         }
       })
 
-      expect(statusCode).toBe(200)
-      expect(result).toBe('protected content')
+      expect(statusCode).toBe(403)
+      expect(result).toContain('You do not have access to this service')
     })
 
     test('Should render the no-access page when the required scope is missing', async () => {
@@ -96,26 +110,34 @@ describe('#createServer', () => {
 
       expect(statusCode).toBe(200)
     })
+
+    test.each(['/', '/about'])(
+      'Should keep %s available to a user without the required role',
+      async (url) => {
+        const { statusCode } = await server.inject({
+          method: 'GET',
+          url,
+          auth: {
+            strategy: 'session',
+            credentials: { sessionId: 'sid', scope: [] }
+          }
+        })
+
+        expect(statusCode).toBe(200)
+      }
+    )
   })
 
-  describe('no-store cache headers', () => {
-    test('Should set no-store on authenticated responses', async () => {
-      const { headers } = await server.inject({
-        method: 'GET',
-        url: '/test/protected',
-        auth: {
-          strategy: 'session',
-          credentials: { sessionId: 'sid', scope: ['user'] }
-        }
-      })
-
-      expect(headers['cache-control']).toBe('no-store')
+  test('Should not let pages be stored', async () => {
+    const { headers } = await server.inject({
+      method: 'GET',
+      url: '/test/protected',
+      auth: {
+        strategy: 'session',
+        credentials: { sessionId: 'sid', scope: ['Admin'] }
+      }
     })
 
-    test('Should not set no-store on unauthenticated responses', async () => {
-      const { headers } = await server.inject({ method: 'GET', url: '/' })
-
-      expect(headers['cache-control']).not.toBe('no-store')
-    })
+    expect(headers['cache-control']).toBe('no-store')
   })
 })
