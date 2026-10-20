@@ -1,5 +1,5 @@
-import cookie from '@hapi/cookie'
 import { hapiAuthOidcPlugin } from '@defra/hapi-auth-oidc'
+import cookie from '@hapi/cookie'
 
 import { config } from '#/config/config.js'
 import { getCookieOptions } from '../auth/get-cookie-options.js'

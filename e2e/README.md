@@ -1,11 +1,17 @@
 # End-to-end tests
 
-Playwright journeys, grouped by area under [journeys/](journeys). Everything
-here today is [journeys/auth/](journeys/auth), and [journeys/zap/](journeys/zap),
-a post-suite assertion against OWASP ZAP when the proxy is on. The sign-in
-journeys sign in against the local Entra ID stub, not real Entra; see
-[Signing in locally and in CI](../README.md#signing-in-locally-and-in-ci) for
-why, and for what that does and does not test.
+Playwright journeys, grouped by area under [journeys/](journeys):
+
+- [journeys/auth/](journeys/auth) — the sign-in journeys
+- [journeys/accessibility/](journeys/accessibility), tagged `@a11y` — an axe
+  scan of every page to WCAG 2.2 AA plus axe best practice, and a check that
+  each page title matches its heading
+- [journeys/zap/](journeys/zap) — a post-suite assertion against OWASP ZAP
+  when the proxy is on
+
+The sign-in journeys sign in against the local Entra ID stub, not real Entra;
+see [Signing in locally and in CI](../README.md#signing-in-locally-and-in-ci)
+for why, and for what that does and does not test.
 
 ## Running them
 
