@@ -117,6 +117,12 @@ export const config = convict({
     default: 'http://localhost:3001',
     env: 'WASTE_BATTERIES_REG_BACKEND_URL'
   },
+  wasteBatteriesSubmitBackendUrl: {
+    doc: 'Waste batteries submission backend URL',
+    format: 'url',
+    default: 'http://localhost:3001',
+    env: 'WASTE_BATTERIES_SUBMIT_BACKEND_URL'
+  },
   isSecureContextEnabled: {
     doc: 'Enable Secure Context',
     format: Boolean,
