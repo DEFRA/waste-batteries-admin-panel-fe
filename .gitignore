@@ -12,7 +12,8 @@ coverage
 .cache
 .envrc
 tsconfig.tsbuildinfo
-.env
+.env*
+!.env.example
 scratch
 .claude
 e2e/.logs
