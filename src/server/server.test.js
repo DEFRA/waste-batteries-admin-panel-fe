@@ -60,7 +60,7 @@ describe('#createServer', () => {
         url: '/test/protected',
         auth: {
           strategy: 'session',
-          credentials: { sessionId: 'sid', scope: ['Admin'] }
+          credentials: { sessionId: 'sid', scope: ['admin'] }
         }
       })
 
@@ -134,7 +134,7 @@ describe('#createServer', () => {
       url: '/test/protected',
       auth: {
         strategy: 'session',
-        credentials: { sessionId: 'sid', scope: ['Admin'] }
+        credentials: { sessionId: 'sid', scope: ['admin'] }
       }
     })
 

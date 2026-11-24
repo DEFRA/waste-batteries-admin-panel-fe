@@ -23,7 +23,7 @@ export const users = {
       oid: 'e2e00000-0000-0000-0000-000000000001',
       name: 'E2E Admin',
       preferred_username: 'e2e.admin@defra.onmicrosoft.com',
-      roles: ['Admin']
+      roles: ['admin']
     }
   },
   noRoles: {

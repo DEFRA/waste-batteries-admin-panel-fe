@@ -182,14 +182,14 @@ The code is in [src/server/plugins/auth.js](src/server/plugins/auth.js),
 | `ENTRA_DISCOVERY_URI` | `https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration`. Defaults to the [local Entra stub](#signing-in-locally-and-in-ci) |
 | `APP_BASE_URL`        | Public base URL; the callback is `<APP_BASE_URL>/auth/callback`                                                                                          |
 | `ENTRA_SCOPES`        | Defaults to `openid profile email offline_access user.read`. See [App Registration](#app-registration) before calling a backend                          |
-| `ENTRA_REQUIRED_ROLE` | App role needed on every route that does not opt out. Defaults to `Admin`; must match the role value on the App Registration                             |
+| `ENTRA_REQUIRED_ROLE` | App role needed on every route that does not opt out. Defaults to `admin`; must match the role value on the App Registration (case-sensitive)            |
 | `ENTRA_RESPONSE_MODE` | `form_post` in production (needs HTTPS), omitted locally                                                                                                 |
 
 In CDP, set `ENTRA_CLIENT_ID`, `ENTRA_DISCOVERY_URI` and `APP_BASE_URL` per
 environment in `cdp-app-config`, and `ENTRA_CLIENT_SECRET` and
 `SESSION_COOKIE_PASSWORD` as secrets in the CDP Portal. Use
-[the CDP dev verification checklist](docs/entra-id-verification.md) for
-deployment settings and live acceptance checks.
+[the CDP verification checklist](docs/entra-id-verification.md) after
+deploying.
 
 #### App Registration
 
@@ -204,8 +204,17 @@ Registration for this service, set up through ServiceNow. It needs:
   that is a registered redirect URI.
 - **An app role** whose value matches `ENTRA_REQUIRED_ROLE`, allowed for
   groups, plus the `roles` claim in the token configuration.
-- **A security group** (`AG-...`) assigned to that role on the enterprise
-  application. Users are given access by adding them to the group.
+- **A security group** assigned to that role on the enterprise
+  application (`AG-WASTE-BATTERIES-ADMIN`, role `admin`). Users are given
+  access by adding them as direct members; nested groups don't pass on app
+  roles. The app trusts the role, not the group, so anyone else assigned the
+  role on the enterprise application also gets in.
+- **"Assignment required?"** on the enterprise application (optional). With
+  **No**, anyone in the tenant can sign in but lands on "You do not have
+  access"; with **Yes**, Entra blocks them before they reach the app.
+
+To check a user's access, sign in and open `/auth-test` (in the nav): it shows
+their name and roles, or "You do not have access".
 
 Before the app calls a backend with the user's access token, the App
 Registration also needs `requestedAccessTokenVersion: 2` and a custom scope
@@ -277,7 +286,7 @@ The session reads these claims, so keep them in Entra's shape:
 | `preferred_username` | The email address in the header                  |
 | `roles`              | Entra app roles, which become the user's `scope` |
 
-The **Admin** preset has `roles: ["Admin"]`, and the **no roles** preset has
+The **Admin** preset has `roles: ["admin"]`, and the **no roles** preset has
 none, for checking what a user without access sees. To add a preset, add it to
 the `presets` object in `login.html`; the stub reads the file on each request,
 so there is no need to restart it.
@@ -322,14 +331,15 @@ locally and fail on CDP.
 
 ##### Troubleshooting
 
-| Symptom                                                                         | Cause                                                                                |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| "Something went wrong" on **Sign in**, and `TypeError: fetch failed` in the log | The stub is not running: `docker compose up -d entra-stub`                           |
-| The app will not start: `ENTRA_CLIENT_SECRET must be set`                       | Running with `NODE_ENV=production` and no secret. Set it as a CDP secret, or locally |
-| "We could not sign you in" on CDP, with `AADSTS7000215` in the log              | The client secret is wrong                                                           |
-| "We could not sign you in" on CDP, with `AADSTS7000222` in the log              | The client secret has expired: request a new one and update the CDP secret           |
-| The stub sends you back to the wrong port                                       | `APP_BASE_URL` does not match where the app is running                               |
-| Signed in, but no name in the header, or a 403 you did not expect               | The claims are missing `name`, or `roles` does not include the role the route needs  |
+| Symptom                                                                         | Cause                                                                                                                                                                                |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "Something went wrong" on **Sign in**, and `TypeError: fetch failed` in the log | The stub is not running: `docker compose up -d entra-stub`                                                                                                                           |
+| The app will not start: `ENTRA_CLIENT_SECRET must be set`                       | Running with `NODE_ENV=production` and no secret. Set it as a CDP secret, or locally                                                                                                 |
+| "We could not sign you in" on CDP, with `AADSTS7000215` in the log              | The client secret is wrong                                                                                                                                                           |
+| "We could not sign you in" on CDP, with `AADSTS7000222` in the log              | The client secret has expired: request a new one and update the CDP secret                                                                                                           |
+| The stub sends you back to the wrong port                                       | `APP_BASE_URL` does not match where the app is running                                                                                                                               |
+| Signed in, but no name in the header, or a 403 you did not expect               | The claims are missing `name`, or `roles` does not include the role the route needs                                                                                                  |
+| "You do not have access" with real Entra                                        | The ID token's `roles` doesn't include `ENTRA_REQUIRED_ROLE` (case-sensitive). Ask the App Registration owner to check the user is a direct member of the group assigned to the role |
 
 To see what the stub received, run `docker compose logs entra-stub`.
 

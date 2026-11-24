@@ -20,9 +20,6 @@ export const appInstances = {
       LOG_FORMAT: 'ecs',
       LOG_LEVEL: 'info',
       SESSION_COOKIE_SECURE: 'false',
-      // The app has no protected route of its own yet — home and about are
-      // deliberately public — so the harness adds one. See test-server.js
-      E2E_PROTECTED_ROUTES: 'true',
       PORT: String(port),
       // Sign in against the local Entra stub, which accepts any client
       // secret. Both are the non-production defaults; set here so the suite

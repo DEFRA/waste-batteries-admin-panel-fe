@@ -1,4 +1,5 @@
 import { about } from '../routes/about/index.js'
+import { authTest } from '../routes/auth-test/index.js'
 import { authRoutes } from '../routes/auth/index.js'
 import { health } from '../routes/health/index.js'
 import { home } from '../routes/home/index.js'
@@ -11,7 +12,7 @@ export const router = {
       await server.register([health])
 
       // Application specific routes, add your own routes here
-      await server.register([home, about, authRoutes])
+      await server.register([home, about, authTest, authRoutes])
     }
   }
 }

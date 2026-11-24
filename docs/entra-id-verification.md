@@ -1,61 +1,15 @@
 # Entra authentication verification
 
-This checklist applies to `eb-181-admin-setup`, using the existing Hapi OIDC plugin with client secret authentication, Navikt Docker stub, token refresh and Entra SSO logout.
+Checks to run after deploying to a CDP environment (dev, test, then prod).
+Local tests run against the Entra stub, so they can't prove the real client
+secret, the proxy route to Entra, the HTTPS `form_post` callback or Redis
+sessions across tasks. These checks do.
 
-## Current status
+## Before you start
 
-Live CDP dev checks are **pending**. This workspace has no supplied live `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET`, `ENTRA_DISCOVERY_URI` or `APP_BASE_URL`, no local `.env`, and no connected CDP/Entra tooling. The local `cdp-app-config` checkout has no service configuration directory for `waste-batteries-admin-panel-fe`; confirm the current deployment/configuration in Portal rather than treating that checkout as live evidence.
-
-No Entra registrations, CDP configuration, secrets or deployments were changed. Local tests do not establish real Entra client authentication, proxy routing or cross-site HTTPS callback behaviour.
-
-Local verification completed on 6 October 2026:
-
-| Check                    | Result                                                                                                                |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `npm run format:check`   | Passed                                                                                                                |
-| `npm run lint`           | Passed                                                                                                                |
-| `PORT=0 npm test`        | Passed: 113 tests in 22 files, including real-library log-capture tests for login, refresh and logout success/failure |
-| `npm run build:frontend` | Passed; Vite reports a GOV.UK CSS media-query warning                                                                 |
-| `npm run test:e2e`       | Passed: 13 browser tests against the existing Navikt Docker stub                                                      |
-
-The ten log-capture cases also passed with CDP's ECS log format:
-
-```bash
-LOG_FORMAT=ecs AWS_EMF_ENVIRONMENT=Local TZ=UTC npx --no-install vitest run src/server/auth/auth-logging.test.js
-```
-
-The browser journeys cover successful login, protected-route/role denial, a valid return path with its query string, malformed return values containing a literal tab or dot segments that produce a protocol-relative path, an OAuth cancellation response and Entra end-session redirect with application-session invalidation. Cancellation is simulated with the browser's real state/correlation cookie because the stub has no cancellation button. The local app uses memory sessions and HTTP query callbacks; HTTPS `form_post`, the real client secret and multi-instance Redis remain pending below. The unit log-capture cases exercise both GET and POST callbacks, raw provider failures, ordinary request redaction and retained outcome/trace identifiers.
-
-## Prerequisites for CDP dev
-
-Confirm the actual service URL, Entra registration, role/group assignments and access to the service's CDP logs. Have an assigned account and an account without the required role available for testing.
-
-Use the original branch's configuration names:
-
-| Setting                   | Required value/check                                                                           |
-| ------------------------- | ---------------------------------------------------------------------------------------------- |
-| `ENTRA_CLIENT_ID`         | Client/application ID returned for the approved dev registration                               |
-| `ENTRA_DISCOVERY_URI`     | `https://login.microsoftonline.com/<approved-tenant-id>/v2.0/.well-known/openid-configuration` |
-| `APP_BASE_URL`            | Actual browser-facing HTTPS origin, matching the registration                                  |
-| `ENTRA_REQUIRED_ROLE`     | Exact assigned role value; the original branch defaults to `Admin`                             |
-| `ENTRA_CLIENT_SECRET`     | The registration's client secret, from CDP Secrets. Note its expiry date and who renews it     |
-| `ENTRA_RESPONSE_MODE`     | `form_post`                                                                                    |
-| `SESSION_COOKIE_SECURE`   | `true`                                                                                         |
-| `SESSION_CACHE_ENGINE`    | `redis`, with the environment's correct Redis configuration                                    |
-| `SESSION_COOKIE_PASSWORD` | A real random secret from CDP Secrets, shared by the service's tasks                           |
-| `ENTRA_SCOPES`            | Approved scopes for this branch, retaining `offline_access` for refresh                        |
-
-Register both `<APP_BASE_URL>/auth/callback` and `<APP_BASE_URL>/` as Web redirect URIs; the latter is the post-logout destination used by this implementation. Confirm consent for the requested scopes and the enterprise application's group-to-role assignment.
-
-Configure the platform's native-fetch proxy settings before Node starts, following the current [CDP proxy guide](../../cdp-documentation/how-to/proxy.md). Its current service configuration is:
-
-```dotenv
-NODE_USE_ENV_PROXY=1
-HTTPS_PROXY=http://localhost:3128
-NO_PROXY=.cdp-int.defra.cloud,.s3.eu-west-2.amazonaws.com,sqs.eu-west-2.amazonaws.com,sns.eu-west-2.amazonaws.com,dynamodb.eu-west-2.amazonaws.com
-```
-
-Set these through CDP service configuration, retaining the platform-provided `HTTP_PROXY`; loading them after Node has started is too late. Confirm the service's proxy ACL permits the approved Entra endpoints. Verify that discovery, token and logout discovery requests reach Entra through the required route.
+- The environment's config is set: see [Configuration](../README.md#configuration) and [App Registration](../README.md#app-registration) in the README. The proxy settings are in `cdp-app-config`'s `defaults.env`.
+- You have two accounts: one in the group assigned to the app role, and one that isn't.
+- You can see the service's logs in CDP.
 
 ## Acceptance checks
 
@@ -63,7 +17,7 @@ Record the deployed commit, environment, timestamp, request/trace IDs and outcom
 
 | Check                        | Procedure and expected outcome                                                                                                                                                                                                                                                        | Status  |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| Sign-in and allowed user     | Sign in through the header using an assigned user. Verify a real protected route succeeds and `auth.login` reports `succeeded`. An HTTP health response alone is insufficient.                                                                                                        | Pending |
+| Sign-in and allowed user     | Sign in through the header using an assigned user. Verify a protected route such as `/auth-test` succeeds and `auth.login` reports `succeeded`. An HTTP health response alone is insufficient.                                                                                        | Pending |
 | Missing role/unassigned user | Use a separate browser session/account. Confirm Entra assignment denial or the application's no-access page, with protected content unavailable. Public home/about pages deliberately remain public.                                                                                  | Pending |
 | HTTPS callback               | Observe Entra's POST to the exact `/auth/callback`. The correlation cookie is `SameSite=None; Secure; HttpOnly`; after the existing HTML meta refresh, the Lax application cookie accompanies the protected-page request. POST callback CSRF exemption remains limited to that route. | Pending |
 | Safe return                  | Start from a protected URL with a query string; verify it returns there. Test a return value containing a literal tab followed by another slash; the browser must return to `/`.                                                                                                      | Pending |

@@ -1,11 +1,29 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+import { signInAtStub, users } from '../../support/entra-stub.js'
+
+/** Signs in at the stub, then waits for the callback's redirect to land. */
+async function signInAs(page, user) {
+  await signInAtStub(page, user)
+  await page.waitForURL('/auth-test')
+}
+
 /** Each page, and how to reach it. */
 const pages = [
   { name: 'Home (signed out)', path: '/' },
   { name: 'About (signed out)', path: '/about' },
-  { name: 'Not found', path: '/no-such-page' }
+  { name: 'Not found', path: '/no-such-page' },
+  {
+    name: 'Auth test (signed in)',
+    path: '/auth-test',
+    act: (page) => signInAs(page, users.admin)
+  },
+  {
+    name: 'No access',
+    path: '/auth-test',
+    act: (page) => signInAs(page, users.noRoles)
+  }
 ]
 
 test.describe('Accessibility', { tag: '@a11y' }, () => {

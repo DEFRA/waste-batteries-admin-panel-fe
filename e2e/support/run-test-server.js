@@ -21,7 +21,7 @@ if (!logFile) {
 fs.mkdirSync(path.dirname(logFile), { recursive: true })
 
 const logFd = fs.openSync(logFile, 'w')
-const script = fileURLToPath(new URL('./test-server.js', import.meta.url))
+const script = fileURLToPath(new URL('../../src/index.js', import.meta.url))
 
 const child = spawn(process.execPath, [script], {
   stdio: ['ignore', logFd, logFd],

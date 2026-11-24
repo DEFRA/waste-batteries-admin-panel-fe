@@ -52,17 +52,10 @@ product area.
 
 ## How it is put together
 
-Two routes exist only for these tests, because the application's own pages
-are all deliberately public today:
-
-- `/e2e/protected` takes the server-wide auth default, so it exercises route
-  protection, the default required role (`Admin`) and returning to the page
-  after sign-in.
-- `/e2e/admin-only` requires the `Admin` scope, so it proves Entra app roles
-  reach hapi's scope check.
-
-They are registered in [support/test-server.js](support/test-server.js) behind
-`E2E_PROTECTED_ROUTES` and are never registered by `src/index.js`.
+The journeys run the real app (`src/index.js`) with nothing added. Route
+protection is tested through `/auth-test`, which has no auth options, so it
+takes the server-wide default like any new route: sign-in redirect, the
+required role (`admin`) and returning to the page after sign-in.
 
 The users the journeys sign in as, and the helper that fills in the stub's
 sign-in page, are in [support/entra-stub.js](support/entra-stub.js). A user's

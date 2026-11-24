@@ -12,8 +12,7 @@ function cookiesFrom(response) {
     .join('; ')
 }
 
-// Auth routes are unregistered while Defra ID is disabled (see plugins/auth.js)
-describe.skip('auth routes', () => {
+describe('auth routes', () => {
   let server
   let oidc
 

@@ -164,7 +164,7 @@ export const config = convict({
     requiredRole: {
       doc: 'Entra app role a signed-in user needs to use any route that does not opt out. Must match the role value on the App Registration',
       format: String,
-      default: 'Admin',
+      default: 'admin',
       env: 'ENTRA_REQUIRED_ROLE'
     },
     oidc: {
@@ -189,6 +189,9 @@ export const config = convict({
       scope: {
         doc: 'Space-separated scopes requested at sign-in',
         format: String,
+        // user.read (Microsoft Graph) is not used yet: nothing calls Graph. To
+        // call a backend, swap it for the api://<client-id>/<scope> exposed on
+        // the App Registration (see README "App Registration")
         default: 'openid profile email offline_access user.read',
         env: 'ENTRA_SCOPES'
       },

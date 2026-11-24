@@ -70,6 +70,11 @@ describe('context and cache', () => {
               current: false,
               text: 'About',
               href: '/about'
+            },
+            {
+              current: false,
+              text: 'Auth test',
+              href: '/auth-test'
             }
           ],
           serviceName: 'waste-batteries-admin-panel-fe',
@@ -179,6 +184,11 @@ describe('context and cache', () => {
               current: false,
               text: 'About',
               href: '/about'
+            },
+            {
+              current: false,
+              text: 'Auth test',
+              href: '/auth-test'
             }
           ],
           serviceName: 'waste-batteries-admin-panel-fe',

@@ -27,13 +27,13 @@ test.describe('Sign in', { tag: '@auth' }, () => {
   test('returns to the protected page the user was heading for', async ({
     page
   }) => {
-    await page.goto('/e2e/protected?tab=details')
+    await page.goto('/auth-test?tab=details')
     await signInAtStub(page, users.admin)
 
-    await expect(page).toHaveURL('/e2e/protected?tab=details')
-    await expect(page.getByTestId('e2e-page-heading')).toHaveText(
-      'Protected page'
-    )
+    await expect(page).toHaveURL('/auth-test?tab=details')
+    await expect(
+      page.getByRole('heading', { name: 'Auth test', level: 1 })
+    ).toBeVisible()
   })
 
   for (const redirect of [
@@ -101,37 +101,28 @@ test.describe('Sign in', { tag: '@auth' }, () => {
     expect(endSessionUrl.searchParams.get('id_token_hint')).toBeTruthy()
     await expect(page).toHaveURL('/')
     await expectSignedOut(page)
-    await page.goto('/e2e/protected')
+    await page.goto('/auth-test')
     await expect(page).toHaveURL(/^http:\/\/localhost:3210\/entra\//)
   })
 })
 
 test.describe('App roles', { tag: '@auth' }, () => {
-  const adminOnlyPath = '/e2e/admin-only'
+  const authTestPath = '/auth-test'
 
-  test('needs the required role on routes with no auth options', async ({
+  test('lets a user with the admin role in, and shows who they are', async ({
     page
   }) => {
-    await page.goto('/e2e/protected')
-    await signInAtStub(page, users.noRoles)
-
-    await expect(
-      page.getByRole('heading', {
-        name: 'You do not have access to this service'
-      })
-    ).toBeVisible()
-  })
-
-  test('lets a user with the Admin role in', async ({ page }) => {
-    await page.goto(adminOnlyPath)
+    await page.goto(authTestPath)
     await signInAtStub(page, users.admin)
 
-    await expect(page).toHaveURL(adminOnlyPath)
-    await expect(page.getByTestId('e2e-page-heading')).toHaveText('Admin page')
+    await expect(page).toHaveURL(authTestPath)
+    await expect(page.getByTestId('app-page-body')).toContainText(
+      `${users.admin.claims.name} (${users.admin.claims.preferred_username}) with roles: admin`
+    )
   })
 
   test('shows the no-access page to a user without it', async ({ page }) => {
-    await page.goto(adminOnlyPath)
+    await page.goto(authTestPath)
     await signInAtStub(page, users.noRoles)
 
     await expect(
