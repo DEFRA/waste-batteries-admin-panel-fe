@@ -33,7 +33,7 @@ the defaults under `NODE_ENV=production`, which the Dockerfile sets.
 ## 3. Verify on dev
 
 - [x] Run `npm run test:e2e` (needs Docker)
-- [ ] Commit and push this branch: it re-enables the auth route unit tests
+- [ ] Commit and push this branch (`/auth-test` and nav link, `admin` role default, e2e tests on `/auth-test`, re-enabled auth route unit tests, docs)
 - [ ] Deploy to dev and run the acceptance checks in the [verification doc](docs/entra-id-verification.md#acceptance-checks)
 - [ ] Sign-out returns to the app (confirms the `/` redirect URI)
 - [ ] Open `/auth-test` with an account in the group (shows your name and roles) and with one outside it ("You do not have access")
