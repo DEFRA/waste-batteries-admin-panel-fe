@@ -34,6 +34,21 @@ function buildAuthContext(request) {
   }
 }
 
+// Account menu for wrcHeader: an item without an href renders as plain text
+function buildAccountNavigation(auth) {
+  if (!auth.isAuthenticated) {
+    return [{ text: 'Sign in', href: '/auth/sign-in' }]
+  }
+
+  return [
+    {
+      text: auth.displayName ?? auth.email,
+      visuallyHiddenText: 'Signed in as '
+    },
+    { text: 'Sign out', href: '/auth/sign-out' }
+  ]
+}
+
 export function context(request) {
   if (usesBuiltAssets() && !viteManifest) {
     try {
@@ -43,11 +58,14 @@ export function context(request) {
     }
   }
 
+  const auth = buildAuthContext(request)
+
   return {
     assetPath: `${assetPath}/assets`,
     serviceName: config.get('serviceName'),
     serviceUrl: '/',
-    auth: buildAuthContext(request),
+    auth,
+    accountNavigation: buildAccountNavigation(auth),
     breadcrumbs: [],
     navigation: buildNavigation(request),
     getAssetPath(asset) {

@@ -14,6 +14,7 @@ Core delivery platform Node.js Frontend Template
   - [Setup](#setup)
   - [Development](#development)
   - [Authentication](#authentication)
+  - [Header and footer components](#header-and-footer-components)
   - [Production](#production)
   - [Npm scripts](#npm-scripts)
   - [Update dependencies](#update-dependencies)
@@ -345,6 +346,48 @@ To see what the stub received, run `docker compose logs entra-stub`.
 
 The stub image is pinned in `compose.yml`. When updating it, run
 `npm run test:e2e` to check sign-in still works.
+
+### Header and footer components
+
+The header, footer and service navigation styling come from
+[DEFRA/waste-regulator-components-fe](https://github.com/DEFRA/waste-regulator-components-fe)
+(v0.3.1). The files are copied into this repo rather than installed as a
+package:
+
+- `src/server/common/components/wrc-header/`: `wrcHeader` and the service
+  navigation styles
+- `src/server/common/components/wrc-footer/`: `wrcFooter`
+- `src/client/stylesheets/variables/_wrc-variables.scss`: the
+  `$defra-internal-*` colours
+
+The layout (`src/server/common/templates/layouts/page.njk`) uses them in place
+of the GOV.UK header and footer. The account menu (Sign in, or the signed-in
+user's name and Sign out) is built in `src/config/nunjucks/context/context.js`.
+The service navigation is `govukServiceNavigation` wrapped in
+`.defra-internal-service-header`, not the package's `wrcServiceHeader`, which
+always renders a Welsh/English language bar that this service doesn't need.
+
+#### Why copy rather than install
+
+- **No npm registry.** The package isn't published to npm, so the only way to
+  install it is as a git dependency
+  (`github:DEFRA/waste-regulator-components-fe#v0.3.1`). Git dependencies can't
+  use normal version ranges, so every update means bumping the tag by hand,
+  and Dependabot handles them poorly.
+- **Docker and CI builds.** A git dependency means `npm ci` has to reach
+  GitHub during the Docker build. The lockfile records it as a
+  `git+ssh://git@github.com/...` URL, which can fail in build environments
+  without git, SSH keys or access to github.com.
+- **Vite and Sass.** The package's Sass loads govuk-frontend with a hardcoded
+  path, `@forward "node_modules/govuk-frontend/dist/govuk/base"`. That only
+  resolves if `.` (the project root) is added to the Sass `loadPaths` in
+  `vite.config.js`. The copied files use `@use "govuk-frontend" as *` like the
+  rest of this app.
+
+The cost is drift: upstream design changes won't arrive automatically. Each
+copied file names the version it came from. To update, diff against a newer tag
+of the upstream repo and merge by hand. If the package is published to npm
+(for example under `@defra`), switch back to installing it.
 
 ### Production
 

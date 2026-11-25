@@ -6,11 +6,11 @@ import { expect } from '@playwright/test'
  */
 
 export async function expectSignedInAs(page, name) {
-  await expect(page.getByTestId('app-signed-in-user')).toContainText(name)
+  await expect(page.getByRole('banner')).toContainText(`Signed in as ${name}`)
   await expect(page.getByRole('link', { name: 'Sign in' })).toHaveCount(0)
 }
 
 export async function expectSignedOut(page) {
   await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible()
-  await expect(page.getByTestId('app-signed-in-user')).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Sign out' })).toHaveCount(0)
 }
