@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import lodash from 'lodash'
+import nunjucks from 'nunjucks'
 import Boom from '@hapi/boom'
 
 import { buildEndSessionUrl, postSignOutPath } from '../../auth/end-session.js'
@@ -55,7 +55,8 @@ export async function callbackController(request, h) {
   // A meta refresh rather than a 302: with form_post the browser arrives here
   // on a cross-site POST, and the next request must be same-site for the Lax
   // session cookie to go with it
-  const redirect = lodash.escape(
+  // HTML-escape for the attribute below (nunjucks' own autoescape function)
+  const redirect = nunjucks.lib.escape(
     getSafeRedirect(request.yar.flash(REDIRECT_KEY)?.at(0) ?? '/')
   )
   return h

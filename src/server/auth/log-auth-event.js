@@ -2,15 +2,16 @@
 // logger's mixin supplies the trace ID. The event and outcome are repeated in
 // the message because CDP's log index drops fields it does not map.
 export function logAuthEvent(request, event, outcome, reason) {
+  const detail = reason ? ` (${reason})` : ''
   request.server.logger.info(
     { event, outcome, requestId: request.info.id },
-    `Authentication event: ${event} ${outcome}${reason ? ` (${reason})` : ''}`
+    `Authentication event: ${event} ${outcome}${detail}`
   )
 }
 
 // Entra error codes (AADSTS…) identify a failure without the free text around
 // them, which can echo request values
-const aadstsCode = (text) => String(text ?? '').match(/AADSTS\d+/)?.[0]
+const aadstsCode = (text) => /AADSTS\d+/.exec(String(text ?? ''))?.[0]
 
 /**
  * The parts of a hapi-auth-oidc / openid-client error that are safe to log:
