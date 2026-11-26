@@ -70,6 +70,11 @@ describe('context and cache', () => {
               current: false,
               text: 'About',
               href: '/about'
+            },
+            {
+              current: false,
+              text: 'Auth test',
+              href: '/auth-test'
             }
           ],
           serviceName: 'waste-batteries-admin-panel-fe',
@@ -84,7 +89,6 @@ describe('context and cache', () => {
             isAuthenticated: true,
             credentials: {
               displayName: 'Jo Bloggs',
-              organisationName: 'Acme Ltd',
               email: 'jo.bloggs@example.com'
             }
           }
@@ -93,7 +97,6 @@ describe('context and cache', () => {
         expect(authenticatedContext.auth).toEqual({
           isAuthenticated: true,
           displayName: 'Jo Bloggs',
-          organisationName: 'Acme Ltd',
           email: 'jo.bloggs@example.com'
         })
       })
@@ -181,6 +184,11 @@ describe('context and cache', () => {
               current: false,
               text: 'About',
               href: '/about'
+            },
+            {
+              current: false,
+              text: 'Auth test',
+              href: '/auth-test'
             }
           ],
           serviceName: 'waste-batteries-admin-panel-fe',

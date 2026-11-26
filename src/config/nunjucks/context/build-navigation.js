@@ -1,5 +1,5 @@
 export function buildNavigation(request) {
-  const navigation = [
+  return [
     {
       text: 'Home',
       href: '/',
@@ -9,16 +9,11 @@ export function buildNavigation(request) {
       text: 'About',
       href: '/about',
       current: request?.path === '/about'
+    },
+    {
+      text: 'Auth test',
+      href: '/auth-test',
+      current: request?.path === '/auth-test'
     }
   ]
-
-  if (request?.auth?.isAuthenticated) {
-    navigation.push({
-      text: 'Example',
-      href: '/example',
-      current: request?.path === '/example'
-    })
-  }
-
-  return navigation
 }

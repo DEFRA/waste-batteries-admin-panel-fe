@@ -1,12 +1,12 @@
 import {
+  callbackController,
   signInController,
-  signInOidcController,
-  signOutController,
-  signOutOidcController
+  signOutController
 } from './controller.js'
+import { callbackPath } from '../../auth/oidc-options.js'
 
 /**
- * Sets up the Defra ID auth routes.
+ * Sets up the Entra ID auth routes.
  * These routes are registered in src/server/plugins/router.js.
  */
 export const authRoutes = {
@@ -17,35 +17,35 @@ export const authRoutes = {
         {
           method: 'GET',
           path: '/auth/sign-in',
-          // Bell intercepts and redirects to Defra ID; the handler only runs
-          // if the user arrives here already authenticated
-          options: { auth: 'defra-id' },
+          options: { auth: false },
           handler: signInController
         },
         {
           method: 'GET',
-          path: '/auth/sign-in-oidc',
-          options: { auth: { strategy: 'defra-id', mode: 'try' } },
-          handler: signInOidcController
+          path: callbackPath,
+          options: { auth: false },
+          handler: callbackController
+        },
+        {
+          // form_post: Entra posts the code as a form, from its own origin, so
+          // there is no crumb token to check
+          method: 'POST',
+          path: callbackPath,
+          options: {
+            auth: false,
+            plugins: { crumb: false },
+            payload: {
+              parse: true,
+              allow: 'application/x-www-form-urlencoded'
+            }
+          },
+          handler: callbackController
         },
         {
           method: 'GET',
           path: '/auth/sign-out',
           options: { auth: { strategy: 'session', mode: 'try' } },
           handler: signOutController
-        },
-        {
-          method: 'GET',
-          path: '/auth/sign-out-oidc',
-          options: { auth: false },
-          handler: signOutOidcController
-        },
-        {
-          method: 'GET',
-          // Organisation re-selection; providerParams adds forceReselection
-          path: '/auth/organisation',
-          options: { auth: 'defra-id' },
-          handler: signInController
         }
       ])
     }

@@ -18,6 +18,11 @@ describe('#buildNavigation', () => {
         current: false,
         text: 'About',
         href: '/about'
+      },
+      {
+        current: false,
+        text: 'Auth test',
+        href: '/auth-test'
       }
     ])
   })
@@ -33,33 +38,11 @@ describe('#buildNavigation', () => {
         current: false,
         text: 'About',
         href: '/about'
-      }
-    ])
-  })
-
-  test('Should show example navigation to signed-in users', () => {
-    expect(
-      buildNavigation(
-        mockRequest({
-          path: '/example',
-          auth: { isAuthenticated: true }
-        })
-      )
-    ).toEqual([
-      {
-        current: false,
-        text: 'Home',
-        href: '/'
       },
       {
         current: false,
-        text: 'About',
-        href: '/about'
-      },
-      {
-        current: true,
-        text: 'Example',
-        href: '/example'
+        text: 'Auth test',
+        href: '/auth-test'
       }
     ])
   })
