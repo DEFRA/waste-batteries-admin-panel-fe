@@ -107,7 +107,7 @@ describe('auth routes', () => {
           headers: { cookie: cookiesFrom(response) }
         })
         expect(home.result).toContain('Jo Bloggs')
-        expect(home.result).toContain('jo.bloggs@defra.gov.uk')
+        expect(home.result).toContain('Sign out')
       }
     )
 

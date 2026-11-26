@@ -30,9 +30,14 @@ Object.entries(filters).forEach(([name, filter]) => {
 
 export function renderComponent(componentName, params, callBlock) {
   const macroPath = `${componentName}/macro.njk`
-  const macroName = `app${
-    componentName.charAt(0).toUpperCase() + camelCase(componentName.slice(1))
-  }`
+  // Copied WRC components keep their upstream macro names (wrcHeader), the
+  // rest of ours are prefixed with app (appHeading)
+  const macroName = componentName.startsWith('wrc-')
+    ? camelCase(componentName)
+    : `app${
+        componentName.charAt(0).toUpperCase() +
+        camelCase(componentName.slice(1))
+      }`
   const macroParams = JSON.stringify(params, null, 2)
   let macroString = `{%- from "${macroPath}" import ${macroName} -%}`
 

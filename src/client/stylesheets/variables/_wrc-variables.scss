@@ -1,0 +1,16 @@
+// Copied from DEFRA/waste-regulator-components-fe v0.3.1 (dist/wrc/_variables.scss)
+@use "sass:color";
+
+$defra-internal-brand: #00a33b !default;
+$defra-internal-footer-link: #3b3b3b !default;
+$defra-internal-nav-background: color.mix(
+  #ffffff,
+  $defra-internal-brand,
+  92%
+) !default;
+$defra-internal-link: #00703c !default;
+$defra-internal-link-hover: color.mix(
+  #000000,
+  $defra-internal-link,
+  40%
+) !default;

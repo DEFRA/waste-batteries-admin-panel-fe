@@ -58,6 +58,7 @@ describe('context and cache', () => {
         expect(contextResult).toEqual({
           assetPath: '/public/assets',
           auth: { isAuthenticated: false },
+          accountNavigation: [{ text: 'Sign in', href: '/auth/sign-in' }],
           breadcrumbs: [],
           getAssetPath: expect.any(Function),
           navigation: [
@@ -99,6 +100,10 @@ describe('context and cache', () => {
           displayName: 'Jo Bloggs',
           email: 'jo.bloggs@example.com'
         })
+        expect(authenticatedContext.accountNavigation).toEqual([
+          { text: 'Jo Bloggs', visuallyHiddenText: 'Signed in as ' },
+          { text: 'Sign out', href: '/auth/sign-out' }
+        ])
       })
 
       describe('With valid asset path', () => {
@@ -172,6 +177,7 @@ describe('context and cache', () => {
         expect(contextResult).toEqual({
           assetPath: '/public/assets',
           auth: { isAuthenticated: false },
+          accountNavigation: [{ text: 'Sign in', href: '/auth/sign-in' }],
           breadcrumbs: [],
           getAssetPath: expect.any(Function),
           navigation: [

@@ -5,8 +5,9 @@
 {% from "govuk/components/service-navigation/macro.njk" import govukServiceNavigation %}
 
 {# Import custom components globally #}
-{% from "account-bar/macro.njk" import appAccountBar %}
 {% from "heading/macro.njk" import appHeading %}
+{% from "wrc-header/macro.njk" import wrcHeader %}
+{% from "wrc-footer/macro.njk" import wrcFooter %}
 
 {% set mainClasses = "app-main-wrapper" %}
 
@@ -22,39 +23,22 @@
   <link href="{{ getAssetPath('src/client/stylesheets/application.scss') }}" rel="stylesheet">
 {% endblock %}
 
-{# Override the inner header/footer blocks, not header/footer themselves —
-   those hold GOV.UK's <header> and <footer> landmarks #}
-{% block govukHeader %}
-  {# serviceName being used in govukHeader will be @deprecated in v6. It has moved to govukServiceNavigation - https://github.com/alphagov/govuk-frontend/blob/main/CHANGELOG.md#move-service-name-and-navigation-links-from-the-govuk-header-to-service-navigation-component #}
-  {{ govukHeader({
-    homepageUrl: "https://www.gov.uk/",
-    classes: "app-header",
-    containerClasses: "govuk-width-container",
-    serviceName: serviceName,
-    serviceUrl: serviceUrl,
-    useTudorCrown: true
+{# Override the outer header/footer blocks: wrcHeader and wrcFooter render
+   their own <header> and <footer> landmarks, and the sticky footer CSS needs
+   .defra-internal-footer to be a direct child of <body> #}
+{% block header %}
+  {{ wrcHeader({
+    navigation: accountNavigation
   }) }}
-{% endblock %}
 
-{% block govukServiceNavigation %}
-  {{ govukServiceNavigation({
-    navigation: navigation
-  }) }}
-{% endblock %}
-
-{% block headerEnd %}
-  {% if auth.isAuthenticated %}
-    {{ appAccountBar({
-      email: auth.email,
-      name: auth.displayName
+  {# Defra service navigation styling, from wrc-header/_wrc-header.scss #}
+  <div class="defra-internal-service-header">
+    {{ govukServiceNavigation({
+      serviceName: serviceName,
+      serviceUrl: serviceUrl,
+      navigation: navigation
     }) }}
-  {% else %}
-    <div class="govuk-width-container">
-      <p class="govuk-body-s govuk-!-margin-top-2">
-        <a class="govuk-link" href="/auth/sign-in">Sign in</a>
-      </p>
-    </div>
-  {% endif %}
+  </div>
 {% endblock %}
 
 {% block pageTitle %}
@@ -71,24 +55,22 @@
 
 {% block content %}{% endblock %}
 
-{% block govukFooter %}
-  {{ govukFooter({
-    meta: {
-      items: [
-        {
-          href: "https://www.gov.uk/help/privacy-notice",
-          text: "Privacy"
-        },
-        {
-          href: "https://www.gov.uk/help/cookies",
-          text: "Cookies"
-        },
-        {
-          href: "https://www.gov.uk/help/accessibility-statement",
-          text: "Accessibility statement"
-        }
-      ]
-    }
+{% block footer %}
+  {{ wrcFooter({
+    links: [
+      {
+        href: "https://www.gov.uk/help/privacy-notice",
+        text: "Privacy"
+      },
+      {
+        href: "https://www.gov.uk/help/cookies",
+        text: "Cookies"
+      },
+      {
+        href: "https://www.gov.uk/help/accessibility-statement",
+        text: "Accessibility statement"
+      }
+    ]
   }) }}
 {% endblock %}
 
