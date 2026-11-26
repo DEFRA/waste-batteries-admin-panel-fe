@@ -5,6 +5,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     clearMocks: true,
+    setupFiles: ['./test-helpers/clean-env.js'],
     // Vitest 5 starts one worker per file. Importing the server in beforeAll
     // can exceed the 10s default when every file loads at once.
     hookTimeout: 30000,

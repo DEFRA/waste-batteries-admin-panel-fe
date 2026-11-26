@@ -5,7 +5,7 @@ import { config } from '#/config/config.js'
 // Registration, so <APP_BASE_URL>/ must be registered alongside the callback.
 export const postSignOutPath = '/'
 
-let endSessionEndpoint
+let endSessionEndpoint = null
 
 // @defra/hapi-auth-oidc has no sign-out, and keeps its discovered config to
 // itself, so read end_session_endpoint from the discovery document directly.

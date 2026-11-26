@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import escapeHtml from 'lodash/escape.js'
+import lodash from 'lodash'
 import Boom from '@hapi/boom'
 
 import { buildEndSessionUrl, postSignOutPath } from '../../auth/end-session.js'
@@ -12,10 +12,13 @@ import {
 
 const LOGIN_EVENT = 'auth.login'
 const LOGOUT_EVENT = 'auth.logout'
+const SUCCEEDED = 'succeeded'
+// yar flash key: where to send the user once sign-in completes
+const REDIRECT_KEY = 'redirect'
 
 export async function signInController(request, h) {
   // yar-backed so it survives the round trip to Entra
-  request.yar.flash('redirect', getSafeRedirect(request.query.redirect))
+  request.yar.flash(REDIRECT_KEY, getSafeRedirect(request.query.redirect))
   try {
     const response = await withAuthErrorLogging(request, LOGIN_EVENT, () =>
       request.login(h)
@@ -47,13 +50,13 @@ export async function callbackController(request, h) {
 
   await request.server.app.cache.set(sessionId, session)
   request.cookieAuth.set({ sessionId })
-  logAuthEvent(request, LOGIN_EVENT, 'succeeded')
+  logAuthEvent(request, LOGIN_EVENT, SUCCEEDED)
 
   // A meta refresh rather than a 302: with form_post the browser arrives here
   // on a cross-site POST, and the next request must be same-site for the Lax
   // session cookie to go with it
-  const redirect = escapeHtml(
-    getSafeRedirect(request.yar.flash('redirect')?.at(0) ?? '/')
+  const redirect = lodash.escape(
+    getSafeRedirect(request.yar.flash(REDIRECT_KEY)?.at(0) ?? '/')
   )
   return h
     .response(
@@ -66,7 +69,7 @@ export async function signOutController(request, h) {
   request.cookieAuth.clear()
 
   if (!request.auth.isAuthenticated) {
-    logAuthEvent(request, LOGOUT_EVENT, 'succeeded')
+    logAuthEvent(request, LOGOUT_EVENT, SUCCEEDED)
     return h.redirect(postSignOutPath)
   }
 
@@ -77,7 +80,7 @@ export async function signOutController(request, h) {
   // stops the next sign-in going straight through without a prompt
   try {
     const response = h.redirect(await buildEndSessionUrl(idToken))
-    logAuthEvent(request, LOGOUT_EVENT, 'succeeded')
+    logAuthEvent(request, LOGOUT_EVENT, SUCCEEDED)
     return response
   } catch {
     logAuthEvent(request, LOGOUT_EVENT, 'local_only')
