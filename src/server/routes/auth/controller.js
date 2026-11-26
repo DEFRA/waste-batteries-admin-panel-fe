@@ -5,7 +5,10 @@ import Boom from '@hapi/boom'
 import { buildEndSessionUrl, postSignOutPath } from '../../auth/end-session.js'
 import { getSafeRedirect } from '../../auth/get-safe-redirect.js'
 import { toSession } from '../../auth/session.js'
-import { logAuthEvent } from '../../auth/log-auth-event.js'
+import {
+  logAuthEvent,
+  withAuthErrorLogging
+} from '../../auth/log-auth-event.js'
 
 const LOGIN_EVENT = 'auth.login'
 const LOGOUT_EVENT = 'auth.logout'
@@ -14,11 +17,12 @@ export async function signInController(request, h) {
   // yar-backed so it survives the round trip to Entra
   request.yar.flash('redirect', getSafeRedirect(request.query.redirect))
   try {
-    const response = await request.login(h)
+    const response = await withAuthErrorLogging(request, LOGIN_EVENT, () =>
+      request.login(h)
+    )
     logAuthEvent(request, LOGIN_EVENT, 'started')
     return response
   } catch {
-    logAuthEvent(request, LOGIN_EVENT, 'failed')
     throw Boom.unauthorized()
   }
 }
@@ -28,9 +32,10 @@ export async function callbackController(request, h) {
   // including the user cancelling at Entra
   let credentials
   try {
-    credentials = await request.callback(h)
+    credentials = await withAuthErrorLogging(request, LOGIN_EVENT, () =>
+      request.callback(h)
+    )
   } catch {
-    logAuthEvent(request, LOGIN_EVENT, 'failed')
     throw Boom.unauthorized()
   }
   const sessionId = randomUUID() // fresh id on every sign-in — prevents fixation
