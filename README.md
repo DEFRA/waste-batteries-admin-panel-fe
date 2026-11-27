@@ -118,6 +118,15 @@ npm run git:hooks
 
 ### Development
 
+When the Batteries services run together locally, each one uses these ports. `npm run dev` binds this UI to port 3003.
+
+| Service      | UI   | API  |
+| ------------ | ---- | ---- |
+| Registration | 3000 | 8085 |
+| Submissions  | 3001 | 8086 |
+| Obligations  | 3002 | 8087 |
+| Admin panel  | 3003 | n/a  |
+
 To run everything in docker, you can use:
 
 ```bash
