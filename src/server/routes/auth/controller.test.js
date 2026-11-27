@@ -194,7 +194,7 @@ describe('auth routes', () => {
       expect(`${location.origin}${location.pathname}`).toBe(endSessionEndpoint)
       expect(Object.fromEntries(location.searchParams)).toEqual({
         client_id: 'local-client-id',
-        post_logout_redirect_uri: 'http://localhost:3000/',
+        post_logout_redirect_uri: 'http://localhost:3003/',
         id_token_hint: 'id-token'
       })
       expect(await server.app.cache.get('session-1')).toBeNull()

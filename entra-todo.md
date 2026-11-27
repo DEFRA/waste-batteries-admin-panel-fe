@@ -14,8 +14,8 @@ The ID token now carries `roles: ["admin"]`. The group is
 - [x] Request a `defradev` security group via ServiceNow
 - [x] Assign that group to the role under Enterprise applications → Users and groups (not "Default Access")
 - [ ] Add the team as direct members (nested groups don't pass on app roles): Anthony.Barlow, Arihan.Sinha, Ashley.Connolly, Kieran.Ohanlon, Philip.Morris (`@defradev.onmicrosoft.com`)
-- [x] Check locally: `node --env-file=.env scratch/whoami-server.js`, sign out of Entra and open <http://localhost:3000/whoami> in a private window. `idTokenClaims.roles` should hold the role.
-- [x] Check access: `npm run dev`, then sign in at <http://localhost:3000/auth-test>; it shows your name and roles
+- [x] Check locally: `node --env-file=.env scratch/whoami-server.js`, sign out of Entra and open <http://localhost:3003/whoami> in a private window. `idTokenClaims.roles` should hold the role.
+- [x] Check access: `npm run dev`, then sign in at <http://localhost:3003/auth-test>; it shows your name and roles
 
 ## 2. CDP dev and test
 

@@ -91,6 +91,8 @@ services:
     environment:
       PORT: 3000
       NODE_ENV: production
+      # This compose file publishes the frontend on 3000. npm run dev uses 3003.
+      APP_BASE_URL: http://localhost:3000
       REDIS_HOST: redis
       SESSION_COOKIE_SECURE: false
       USE_SINGLE_INSTANCE_CACHE: true

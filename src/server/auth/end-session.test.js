@@ -25,7 +25,7 @@ describe('#buildEndSessionUrl', () => {
     expect(url.origin + url.pathname).toBe('https://login.example/logout')
     expect(url.searchParams.get('client_id')).toBe('local-client-id')
     expect(url.searchParams.get('post_logout_redirect_uri')).toBe(
-      'http://localhost:3000/'
+      'http://localhost:3003/'
     )
     expect(url.searchParams.get('id_token_hint')).toBe('id-token')
   })

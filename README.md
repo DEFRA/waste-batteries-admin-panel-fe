@@ -245,7 +245,7 @@ authentication, routes, session, refresh and role handling. The differences:
 
 To test against real Entra locally, set `ENTRA_DISCOVERY_URI`,
 `ENTRA_CLIENT_ID` and `ENTRA_CLIENT_SECRET` for the `defradev` tenant in your
-`.env` (git-ignored). `http://localhost:3000/auth/callback` must be a
+`.env` (git-ignored). `http://localhost:3003/auth/callback` must be a
 registered redirect URI.
 
 ##### Signing in locally
@@ -257,7 +257,7 @@ docker compose up -d entra-stub
 npm run dev
 ```
 
-Open <http://localhost:3000> and choose **Sign in**. You land on the stub's
+Open <http://localhost:3003> and choose **Sign in**. You land on the stub's
 sign-in page, with a red "Not real Entra ID" banner. Pick a preset or edit
 the claims, then choose **Sign in** to come back to the app signed in.
 

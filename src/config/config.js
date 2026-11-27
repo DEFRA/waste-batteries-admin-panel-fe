@@ -32,7 +32,7 @@ export const config = convict({
   port: {
     doc: 'The port to bind.',
     format: 'port',
-    default: 3000,
+    default: 3003,
     env: 'PORT'
   },
   staticCacheTimeout: {
@@ -183,7 +183,7 @@ export const config = convict({
       externalBaseUrl: {
         doc: 'Public base URL of this service, used to build the callback URL, no trailing slash',
         format: 'url',
-        default: 'http://localhost:3000',
+        default: 'http://localhost:3003',
         env: 'APP_BASE_URL'
       },
       scope: {
