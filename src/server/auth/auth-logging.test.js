@@ -220,6 +220,9 @@ describe('authentication events', () => {
       expect(response.payload).toContain('We could not sign you in')
       expect(response.payload).not.toContain(providerDetail)
       expectEvent('auth.login', 'failed')
+      expect(logLines.join('')).toContain(
+        'Authentication event: auth.login failed (invalid_grant, OAUTH_RESPONSE_BODY_ERROR, HTTP 400)'
+      )
     }
   )
 

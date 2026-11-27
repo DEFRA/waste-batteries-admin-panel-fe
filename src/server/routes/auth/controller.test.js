@@ -124,6 +124,18 @@ describe('auth routes', () => {
       expect(result).toContain('content="0;url=/"')
     })
 
+    test('Should send the user home when nothing says where they were going', async () => {
+      vi.spyOn(oidc, 'callback').mockResolvedValue(credentials)
+
+      // No sign-in first, so no redirect is stored for the callback to read
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/auth/callback'
+      })
+
+      expect(result).toContain('content="0;url=/"')
+    })
+
     test('Should render the sign-in failure page when Entra refuses', async () => {
       vi.spyOn(oidc, 'callback').mockRejectedValue(
         Boom.unauthorized('access_denied')
